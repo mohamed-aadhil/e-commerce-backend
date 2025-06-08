@@ -1,5 +1,7 @@
 const { Product, NewBook, UsedBook, Ebook, Genre, BookGenre, Audience, BookAudience, Inventory, InventoryTransaction } = require('../../models/product');
 const { sequelize } = require('../../models/product/Product');
+const { Op } = require('sequelize');
+const { productCardDTO } = require('../../dtos/v1/product.card.dto');
 
 exports.createProduct = async (data) => {
   return sequelize.transaction(async (t) => {
@@ -91,13 +93,57 @@ exports.updateProduct = async (id, data) => {
 };
 
 exports.deleteProduct = async (id) => {
-  // Implement delete logic (delete product and related records)
+  return sequelize.transaction(async (t) => {
+    const product = await Product.findByPk(id, { transaction: t });
+    if (!product) throw new Error('Product not found');
+    await product.destroy({ transaction: t });
+    // All related records are deleted via ON DELETE CASCADE
+    return;
+  });
 };
 
 exports.listProducts = async (query) => {
-  // Implement product listing with filters, joins for genres/audiences, and inventory
+  const where = {};
+  if (query.product_type) where.product_type = query.product_type;
+  if (query.title) where.title = { [Op.iLike]: `%${query.title}%` };
+  if (query.isbn) where.metadata = { isbn: query.isbn };
+
+  // Build include array with optional filters for genre and audience
+  const include = [
+    { model: NewBook, required: false },
+    // For future: { model: UsedBook, required: false },
+    // For future: { model: Ebook, required: false },
+    {
+      model: Genre,
+      through: { attributes: [] },
+      ...(query.genre_id ? { where: { id: query.genre_id } } : {})
+    },
+    {
+      model: Audience,
+      through: { attributes: [] },
+      ...(query.audience_id ? { where: { id: query.audience_id } } : {})
+    },
+    { model: Inventory }
+  ];
+
+  return Product.findAll({
+    where,
+    include,
+    // Add pagination (limit, offset) if needed
+  });
 };
 
 exports.getProductDetails = async (id) => {
-  // Implement product detail fetch with joins for type-specific, genres, audiences, inventory
-}; 
+  return Product.findByPk(id, {
+    include: [
+      { model: NewBook, required: false },
+      // For future: { model: UsedBook, required: false },
+      // For future: { model: Ebook, required: false },
+      { model: Genre, through: { attributes: [] } },
+      { model: Audience, through: { attributes: [] } },
+      { model: Inventory }
+    ]
+  });
+};
+
+module.exports = { productCardDTO }; 

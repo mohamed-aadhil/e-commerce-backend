@@ -11,4 +11,10 @@ router.post('/products/:id/restock', authenticate, authorize('admin'), restockVa
 // Get product inventory (public or admin)
 router.get('/products/:id/inventory', inventoryController.getProductInventory);
 
+// Inventory stats for dashboard (admin only)
+router.get('/inventory/stats', authenticate, authorize('admin'), inventoryController.getInventoryStats);
+
+// Book inventory table for dashboard (admin only)
+router.get('/inventory/books', authenticate, authorize('admin'), inventoryController.getInventoryBooks);
+
 module.exports = router; 

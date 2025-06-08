@@ -1,5 +1,8 @@
-const { Inventory, InventoryTransaction } = require('../../models/product');
+const { Inventory, InventoryTransaction, Product, NewBook, Genre, Audience } = require('../../models/product');
 const { sequelize } = require('../../models/product/Product');
+const { Op, fn, col, literal } = require('sequelize');
+const { inventoryStatsDTO } = require('../../dtos/v1/inventory.stats.dto');
+const { inventoryBookDTO } = require('../../dtos/v1/inventory.book.dto');
 
 exports.restockProduct = async (productId, { quantity, reason }) => {
   return sequelize.transaction(async (t) => {
@@ -28,4 +31,40 @@ exports.getProductInventory = async (productId) => {
     quantity: inventory ? inventory.quantity : 0,
     transactions,
   };
+};
+
+exports.getInventoryStats = async () => {
+  // Total books (unique products)
+  const totalBooks = await Product.count();
+  // Low stock items (stock < 10)
+  const lowStockItems = await Inventory.count({ where: { quantity: { [Op.lt]: 10, [Op.gt]: 0 } } });
+  // Out of stock items (stock = 0)
+  const outOfStock = await Inventory.count({ where: { quantity: 0 } });
+  // Total value (sum of price * stock)
+  const totalValueResult = await Product.findAll({
+    include: [{ model: Inventory }],
+    attributes: [],
+    raw: true
+  });
+  let totalValue = 0;
+  for (const row of totalValueResult) {
+    if (row['Inventory.quantity'] && row.price) {
+      totalValue += Number(row.price) * Number(row['Inventory.quantity']);
+    }
+  }
+  return inventoryStatsDTO({ totalBooks, lowStockItems, totalValue, outOfStock });
+};
+
+exports.getInventoryBooks = async (query) => {
+  // Optionally add filters (search, genre, etc.)
+  const where = {};
+  if (query.title) where.title = { [Op.iLike]: `%${query.title}%` };
+  const include = [
+    { model: NewBook, required: false },
+    { model: Genre, through: { attributes: [] } },
+    { model: Audience, through: { attributes: [] } },
+    { model: Inventory }
+  ];
+  const products = await Product.findAll({ where, include });
+  return products.map(inventoryBookDTO);
 }; 

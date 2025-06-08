@@ -16,4 +16,22 @@ exports.getProductInventory = async (req, res, next) => {
   } catch (err) {
     next(err);
   }
+};
+
+exports.getInventoryStats = async (req, res, next) => {
+  try {
+    const stats = await inventoryService.getInventoryStats();
+    res.json(stats);
+  } catch (err) {
+    next(err);
+  }
+};
+
+exports.getInventoryBooks = async (req, res, next) => {
+  try {
+    const books = await inventoryService.getInventoryBooks(req.query);
+    res.json(books);
+  } catch (err) {
+    next(err);
+  }
 }; 
