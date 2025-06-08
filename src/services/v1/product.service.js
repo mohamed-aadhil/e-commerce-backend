@@ -40,16 +40,54 @@ exports.createProduct = async (data) => {
       );
     }
 
-    // 4. Inventory
-    await Inventory.create({ product_id: product.id, quantity: data.quantity }, { transaction: t });
-    await InventoryTransaction.create({ product_id: product.id, change: data.quantity, reason: 'initial_stock' }, { transaction: t });
+    // 4. Inventory logic removed from product creation
 
     return product;
   });
 };
 
 exports.updateProduct = async (id, data) => {
-  // Implement update logic (similar to create, but update existing records)
+  return sequelize.transaction(async (t) => {
+    // 1. Update base product
+    const product = await Product.findByPk(id, { transaction: t });
+    if (!product) throw new Error('Product not found');
+
+    await product.update({
+      title: data.title ?? product.title,
+      price: data.price ?? product.price,
+      metadata: data.metadata ?? product.metadata,
+      images: data.images ?? product.images,
+    }, { transaction: t });
+
+    // 2. Update type-specific table (new_book for now)
+    if (product.product_type === 'new_book') {
+      const newBook = await NewBook.findOne({ where: { product_id: id }, transaction: t });
+      if (newBook && data.author) {
+        await newBook.update({ author: data.author }, { transaction: t });
+      }
+    }
+    // (future: handle used_book, ebook)
+
+    // 3. Update associations (replace all for simplicity)
+    if (data.genre_ids) {
+      await BookGenre.destroy({ where: { book_id: id }, transaction: t });
+      await BookGenre.bulkCreate(
+        data.genre_ids.map(genre_id => ({ book_id: id, genre_id })),
+        { transaction: t }
+      );
+    }
+    if (data.audience_ids) {
+      await BookAudience.destroy({ where: { book_id: id }, transaction: t });
+      await BookAudience.bulkCreate(
+        data.audience_ids.map(audience_id => ({ book_id: id, audience_id })),
+        { transaction: t }
+      );
+    }
+
+    // 4. Do NOT update inventory or inventory_transactions here
+
+    return product;
+  });
 };
 
 exports.deleteProduct = async (id) => {

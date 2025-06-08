@@ -16,7 +16,6 @@ const createProductValidation = [
     .isArray().withMessage('Images must be an array of URLs'),
   // Author required for new_book
   body('author')
-    .if(body('product_type').equals('new_book'))
     .isString().withMessage('Author is required for new books'),
   // For future: used_book fields
   body('condition')
@@ -34,12 +33,12 @@ const createProductValidation = [
     .isArray({ min: 1 }).withMessage('At least one genre is required'),
   body('audience_ids')
     .isArray({ min: 1 }).withMessage('At least one audience is required'),
-  // Inventory
-  body('quantity')
-    .isInt({ min: 0 }).withMessage('Initial stock quantity is required and must be a non-negative integer'),
 ];
 
 const updateProductValidation = [
+  body('product_type')
+    .optional()
+    .isIn(['new_book']).withMessage('Only "new_book" is supported at this time'),
   body('title')
     .optional()
     .isString().withMessage('Title must be a string'),
@@ -55,24 +54,23 @@ const updateProductValidation = [
   body('author')
     .optional()
     .isString().withMessage('Author must be a string'),
+  // For future: used_book fields
   body('condition')
-    .optional()
-    .isString().withMessage('Condition must be a string'),
+    .if(body('product_type').equals('used_book'))
+    .isString().withMessage('Condition is required for used books'),
+  // For future: ebook fields
   body('file_format')
-    .optional()
-    .isString().withMessage('File format must be a string'),
+    .if(body('product_type').equals('ebook'))
+    .isString().withMessage('File format is required for ebooks'),
   body('download_url')
-    .optional()
-    .isString().withMessage('Download URL must be a string'),
+    .if(body('product_type').equals('ebook'))
+    .isString().withMessage('Download URL is required for ebooks'),
   body('genre_ids')
     .optional()
     .isArray({ min: 1 }).withMessage('At least one genre is required'),
   body('audience_ids')
     .optional()
     .isArray({ min: 1 }).withMessage('At least one audience is required'),
-  body('quantity')
-    .optional()
-    .isInt({ min: 0 }).withMessage('Stock quantity must be a non-negative integer'),
 ];
 
 module.exports = {
