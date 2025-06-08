@@ -1,0 +1,64 @@
+const bcrypt = require('bcrypt');
+const { generateAccessToken, generateRefreshToken, getRefreshTokenExpiryDate, verifyRefreshToken } = require('../../utils/token.util');
+const User = require('../../models/user/User');
+const RefreshToken = require('../../models/user/RefreshToken');
+const { Op } = require('sequelize');
+
+const SALT_ROUNDS = 10;
+
+async function register({ name, email, password }) {
+  const existing = await User.findOne({ where: { email } });
+  if (existing) throw new Error('Email already registered');
+  const password_hash = await bcrypt.hash(password, SALT_ROUNDS);
+  const user = await User.create({ name, email, password_hash });
+  return user;
+}
+
+async function login({ email, password }) {
+  const user = await User.findOne({ where: { email } });
+  if (!user) throw new Error('Invalid credentials');
+  const valid = await bcrypt.compare(password, user.password_hash);
+  if (!valid) throw new Error('Invalid credentials');
+  const accessToken = generateAccessToken({ id: user.id, role: user.role, name: user.name });
+  const refreshToken = generateRefreshToken({ id: user.id });
+  const expires_at = getRefreshTokenExpiryDate();
+  await RefreshToken.create({ user_id: user.id, token: refreshToken, expires_at });
+  return { user, accessToken, refreshToken };
+}
+
+async function refresh({ refreshToken }) {
+  let payload;
+  try {
+    payload = verifyRefreshToken(refreshToken);
+  } catch (e) {
+    throw new Error('Invalid refresh token');
+  }
+  const stored = await RefreshToken.findOne({ where: { token: refreshToken, revoked: false, expires_at: { [Op.gt]: new Date() } } });
+  if (!stored) throw new Error('Refresh token not found or revoked');
+  // Rotate token: revoke old, issue new
+  stored.revoked = true;
+  await stored.save();
+  const user = await User.findByPk(payload.id);
+  if (!user) throw new Error('User not found');
+  const newAccessToken = generateAccessToken({ id: user.id, role: user.role, name: user.name });
+  const newRefreshToken = generateRefreshToken({ id: user.id });
+  const expires_at = getRefreshTokenExpiryDate();
+  await RefreshToken.create({ user_id: user.id, token: newRefreshToken, expires_at, replaced_by_token: null });
+  return { user, accessToken: newAccessToken, refreshToken: newRefreshToken };
+}
+
+async function logout({ refreshToken }) {
+  const stored = await RefreshToken.findOne({ where: { token: refreshToken } });
+  if (stored) {
+    stored.revoked = true;
+    await stored.save();
+  }
+  return { message: 'Logged out' };
+}
+
+module.exports = {
+  register,
+  login,
+  refresh,
+  logout,
+}; 

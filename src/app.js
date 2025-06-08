@@ -1,21 +1,25 @@
 const express = require('express');
 const app = express();
 const dotenv = require('dotenv');
+const cookieParser = require('cookie-parser');
+const routes = require('./routes');
+const { errorHandler } = require('./middlewares/error.middleware');
 const sequelize = require('./config/database');
-const { User } = require('./models/product');
+
+// Swagger UI setup
+const swaggerUi = require('swagger-ui-express');
+const YAML = require('yamljs');
+const swaggerDocument = YAML.load(__dirname + '/docs/openapi.yaml');
+
 dotenv.config();
 
 app.use(express.json());
+app.use(cookieParser());
 
-// TODO: Add routes here
+app.use('/api', routes);
 
-sequelize.sync()
-  .then(() => {
-    console.log('Database & tables synced!');
-  })
-  .catch((err) => {
-    console.error('Error syncing database:', err);
-  });
+// Serve Swagger UI at /docs
+app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
 app.get('/health', async (req, res) => {
   try {
@@ -25,5 +29,7 @@ app.get('/health', async (req, res) => {
     res.status(500).json({ status: 'error', db: 'disconnected', error: error.message });
   }
 });
+
+app.use(errorHandler);
 
 module.exports = app; 
