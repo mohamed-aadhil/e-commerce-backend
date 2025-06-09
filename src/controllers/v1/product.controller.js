@@ -47,4 +47,14 @@ exports.getProductDetails = async (req, res, next) => {
   } catch (err) {
     next(err);
   }
+};
+
+exports.getProductDetailsWithStats = async (req, res, next) => {
+  try {
+    const product = await productService.getProductDetailsWithStats(req.params.id);
+    if (!product) return res.status(404).json({ error: 'Product not found' });
+    res.json(product);
+  } catch (err) {
+    next(err);
+  }
 }; 

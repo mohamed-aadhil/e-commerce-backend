@@ -2,11 +2,11 @@ const express = require('express');
 const router = express.Router();
 const inventoryController = require('../../controllers/v1/inventory.controller');
 const { restockValidation } = require('../../dtos/v1/inventory.dto');
-const { validate } = require('../../middlewares/validate');
 const { authenticate, authorize } = require('../../middlewares/auth');
+const { validateRequest } = require('../../middlewares/validation.middleware');
 
 // Restock inventory (admin only)
-router.post('/products/:id/restock', authenticate, authorize('admin'), restockValidation, validate, inventoryController.restockProduct);
+router.post('/products/:id/restock', authenticate, authorize('admin'), restockValidation, validateRequest, inventoryController.restockProduct);
 
 // Get product inventory (public or admin)
 router.get('/products/:id/inventory', inventoryController.getProductInventory);
@@ -16,5 +16,8 @@ router.get('/inventory/stats', authenticate, authorize('admin'), inventoryContro
 
 // Book inventory table for dashboard (admin only)
 router.get('/inventory/books', authenticate, authorize('admin'), inventoryController.getInventoryBooks);
+
+// Get product inventory transactions (admin only)
+router.get('/products/:id/inventory/transactions', inventoryController.getProductTransactionHistoryWithStock);
 
 module.exports = router; 

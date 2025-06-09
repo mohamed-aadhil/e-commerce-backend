@@ -146,4 +146,66 @@ exports.getProductDetails = async (id) => {
   });
 };
 
+exports.getProductDetailsWithStats = async (id) => {
+  // 1. Get product details (with inventory)
+  const product = await Product.findByPk(id, {
+    include: [
+      { model: NewBook, required: false },
+      { model: Genre, through: { attributes: [] } },
+      { model: Audience, through: { attributes: [] } },
+      { model: Inventory }
+    ]
+  });
+  if (!product) return null;
+
+  // 2. Get current stock
+  const currentStock = product.Inventory ? product.Inventory.quantity : 0;
+
+  // 3. Get inventory transactions
+  const transactions = await InventoryTransaction.findAll({
+    where: { product_id: id },
+    order: [['created_at', 'ASC']],
+  });
+
+  // 4. Calculate stats
+  let totalSold = 0;
+  let totalRestocked = 0;
+  let salesLast30Days = 0;
+  const now = new Date();
+  const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+  for (const tx of transactions) {
+    if (tx.change < 0 && tx.reason === 'order') {
+      totalSold += Math.abs(tx.change);
+      if (tx.created_at >= thirtyDaysAgo) {
+        salesLast30Days += Math.abs(tx.change);
+      }
+    }
+    if (tx.change > 0 && tx.reason === 'restock') {
+      totalRestocked += tx.change;
+    }
+  }
+
+  const averageDailySales = salesLast30Days / 30;
+  const daysUntilEmpty = averageDailySales > 0 ? Math.floor(currentStock / averageDailySales) : null;
+  const stockValue = currentStock * parseFloat(product.price);
+
+  return {
+    id: product.id,
+    title: product.title,
+    price: product.price,
+    genre: product.Genres && product.Genres[0] ? product.Genres[0].name : null,
+    current_stock: currentStock,
+    stats: {
+      total_sold: totalSold,
+      total_restocked: totalRestocked,
+      stock_value: stockValue,
+      average_daily_sales: Number(averageDailySales.toFixed(2)),
+      days_until_empty: daysUntilEmpty
+    },
+    status: product.status || 'Active',
+    // Add more fields as needed
+  };
+};
+
 module.exports = { productCardDTO }; 

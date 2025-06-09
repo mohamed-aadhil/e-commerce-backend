@@ -67,4 +67,38 @@ exports.getInventoryBooks = async (query) => {
   ];
   const products = await Product.findAll({ where, include });
   return products.map(inventoryBookDTO);
+};
+
+exports.getProductTransactionHistoryWithStock = async (productId, { from, to } = {}) => {
+  const where = { product_id: productId };
+  if (from) where.created_at = { ...where.created_at, [Op.gte]: from };
+  if (to) where.created_at = { ...where.created_at, [Op.lte]: to };
+
+  // Get all transactions in ascending order
+  const transactions = await InventoryTransaction.findAll({
+    where,
+    order: [['created_at', 'ASC']],
+    raw: true
+  });
+
+  // Calculate running stock
+  let stock = 0;
+  // Get initial stock before the first transaction in range
+  if (transactions.length > 0) {
+    const firstDate = transactions[0].created_at;
+    const prevSum = await InventoryTransaction.sum('change', {
+      where: {
+        product_id: productId,
+        created_at: { [Op.lt]: firstDate }
+      }
+    });
+    stock = prevSum || 0;
+  }
+
+  const result = [];
+  for (const tx of transactions) {
+    stock += tx.change;
+    result.push({ ...tx, stock });
+  }
+  return result;
 }; 

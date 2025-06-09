@@ -83,6 +83,215 @@ paths:
                     type: string
         '400':
           description: No refresh token provided
+  /products:
+    get:
+      summary: List all products
+      responses:
+        '200':
+          description: List of products
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProductCard'
+    post:
+      summary: Create a new product
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductCreateRequest'
+      responses:
+        '201':
+          description: Product created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+  /products/{id}:
+    get:
+      summary: Get product details
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Product details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductDetails'
+    put:
+      summary: Update a product
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductUpdateRequest'
+      responses:
+        '200':
+          description: Product updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+    delete:
+      summary: Delete a product
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Product deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductDeleteResponse'
+  /products/{id}/details:
+    get:
+      summary: Get product details with inventory stats
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Product details with stats
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductDetailsWithStats'
+  /products/{id}/restock:
+    post:
+      summary: Restock a product
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RestockRequest'
+      responses:
+        '200':
+          description: Product restocked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Inventory'
+  /products/{id}/inventory:
+    get:
+      summary: Get product inventory and transaction summary
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Product inventory and transactions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductInventorySummary'
+  /products/{id}/inventory/transactions:
+    get:
+      summary: Get product inventory transaction history with running stock
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+        - in: query
+          name: from
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - in: query
+          name: to
+          required: false
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Inventory transaction history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/InventoryTransactionWithStock'
+  /inventory/stats:
+    get:
+      summary: Get inventory stats for dashboard
+      responses:
+        '200':
+          description: Inventory stats
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InventoryStats'
+  /inventory/books:
+    get:
+      summary: Get book inventory table for dashboard
+      responses:
+        '200':
+          description: Book inventory table
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/InventoryBook'
+  /genres:
+    get:
+      summary: List all genres
+      responses:
+        '200':
+          description: List of genres
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Genre'
+  /audiences:
+    get:
+      summary: List all audiences
+      responses:
+        '200':
+          description: List of audiences
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Audience'
 components:
   schemas:
     RegisterRequest:
@@ -135,4 +344,194 @@ components:
         accessToken:
           type: string
         refreshToken:
+          type: string
+    ProductCard:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        price:
+          type: number
+        product_type:
+          type: string
+        metadata:
+          type: object
+        images:
+          type: array
+          items:
+            type: string
+        genres:
+          type: array
+          items:
+            type: string
+        audiences:
+          type: array
+          items:
+            type: string
+        stock:
+          type: integer
+        status:
+          type: string
+    Product:
+      allOf:
+        - $ref: '#/components/schemas/ProductCard'
+        - type: object
+          properties:
+            author:
+              type: string
+    ProductDetails:
+      allOf:
+        - $ref: '#/components/schemas/Product'
+        - type: object
+          properties:
+            description:
+              type: string
+    ProductDetailsWithStats:
+      allOf:
+        - $ref: '#/components/schemas/ProductDetails'
+        - type: object
+          properties:
+            current_stock:
+              type: integer
+            stats:
+              type: object
+              properties:
+                total_sold:
+                  type: integer
+                total_restocked:
+                  type: integer
+                stock_value:
+                  type: number
+                average_daily_sales:
+                  type: number
+                days_until_empty:
+                  type: integer
+            status:
+              type: string
+    ProductCreateRequest:
+      type: object
+      properties:
+        title:
+          type: string
+        price:
+          type: number
+        product_type:
+          type: string
+        metadata:
+          type: object
+        images:
+          type: array
+          items:
+            type: string
+        genre_ids:
+          type: array
+          items:
+            type: integer
+        audience_ids:
+          type: array
+          items:
+            type: integer
+        author:
+          type: string
+    ProductUpdateRequest:
+      allOf:
+        - $ref: '#/components/schemas/ProductCreateRequest'
+    ProductDeleteResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+        deleted:
+          type: boolean
+    RestockRequest:
+      type: object
+      properties:
+        quantity:
+          type: integer
+        reason:
+          type: string
+    Inventory:
+      type: object
+      properties:
+        product_id:
+          type: integer
+        quantity:
+          type: integer
+    ProductInventorySummary:
+      type: object
+      properties:
+        product_id:
+          type: integer
+        quantity:
+          type: integer
+        transactions:
+          type: array
+          items:
+            $ref: '#/components/schemas/InventoryTransaction'
+    InventoryTransaction:
+      type: object
+      properties:
+        id:
+          type: integer
+        product_id:
+          type: integer
+        change:
+          type: integer
+        reason:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+    InventoryTransactionWithStock:
+      allOf:
+        - $ref: '#/components/schemas/InventoryTransaction'
+        - type: object
+          properties:
+            stock:
+              type: integer
+    InventoryStats:
+      type: object
+      properties:
+        totalBooks:
+          type: integer
+        lowStockItems:
+          type: integer
+        totalValue:
+          type: number
+        outOfStock:
+          type: integer
+    InventoryBook:
+      type: object
+      properties:
+        productId:
+          type: string
+        name:
+          type: string
+        author:
+          type: string
+        genres:
+          type: array
+          items:
+            type: string
+        price:
+          type: number
+        stock:
+          type: integer
+        status:
+          type: string
+    Genre:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+    Audience:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
           type: string 
