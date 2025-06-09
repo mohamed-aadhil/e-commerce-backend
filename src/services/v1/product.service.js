@@ -2,25 +2,32 @@ const { Product, NewBook, UsedBook, Ebook, Genre, BookGenre, Audience, BookAudie
 const { sequelize } = require('../../models/product/Product');
 const { Op } = require('sequelize');
 const { productCardDTO } = require('../../dtos/v1/product.card.dto');
+const { DataTypes } = require('sequelize');
 
-exports.createProduct = async (data) => {
+const createProduct = async (data) => {
   return sequelize.transaction(async (t) => {
+    // Ensure images is a valid array of strings
+    let images = [];
+    if (Array.isArray(data.images)) {
+      images = data.images.filter(img => typeof img === 'string' && img.trim() !== '');
+    }
+
     // 1. Create base product
     const product = await Product.create({
       title: data.title,
       price: data.price,
       product_type: data.product_type,
       metadata: data.metadata,
-      images: data.images,
+      images: images.length > 0 ? images : null, // store null if no valid images
     }, { transaction: t });
 
     // 2. Type-specific table
     switch (data.product_type) {
-      case 'new_book':
+      case 'New Book':
         await NewBook.create({ product_id: product.id, author: data.author }, { transaction: t });
         break;
-      // For future: used_book, ebook
-      case 'used_book':
+      // For future: Used Book, ebook
+      case 'Used Book':
         await UsedBook.create({ product_id: product.id, author: data.author, condition: data.condition }, { transaction: t });
         break;
       case 'ebook':
@@ -48,7 +55,7 @@ exports.createProduct = async (data) => {
   });
 };
 
-exports.updateProduct = async (id, data) => {
+const updateProduct = async (id, data) => {
   return sequelize.transaction(async (t) => {
     // 1. Update base product
     const product = await Product.findByPk(id, { transaction: t });
@@ -61,14 +68,14 @@ exports.updateProduct = async (id, data) => {
       images: data.images ?? product.images,
     }, { transaction: t });
 
-    // 2. Update type-specific table (new_book for now)
-    if (product.product_type === 'new_book') {
+    // 2. Update type-specific table (New Book for now)
+    if (product.product_type === 'New Book') {
       const newBook = await NewBook.findOne({ where: { product_id: id }, transaction: t });
       if (newBook && data.author) {
         await newBook.update({ author: data.author }, { transaction: t });
       }
     }
-    // (future: handle used_book, ebook)
+    // (future: handle Used Book, ebook)
 
     // 3. Update associations (replace all for simplicity)
     if (data.genre_ids) {
@@ -92,7 +99,7 @@ exports.updateProduct = async (id, data) => {
   });
 };
 
-exports.deleteProduct = async (id) => {
+const deleteProduct = async (id) => {
   return sequelize.transaction(async (t) => {
     const product = await Product.findByPk(id, { transaction: t });
     if (!product) throw new Error('Product not found');
@@ -102,7 +109,7 @@ exports.deleteProduct = async (id) => {
   });
 };
 
-exports.listProducts = async (query) => {
+const listProducts = async (query) => {
   const where = {};
   if (query.product_type) where.product_type = query.product_type;
   if (query.title) where.title = { [Op.iLike]: `%${query.title}%` };
@@ -133,7 +140,7 @@ exports.listProducts = async (query) => {
   });
 };
 
-exports.getProductDetails = async (id) => {
+const getProductDetails = async (id) => {
   return Product.findByPk(id, {
     include: [
       { model: NewBook, required: false },
@@ -146,7 +153,7 @@ exports.getProductDetails = async (id) => {
   });
 };
 
-exports.getProductDetailsWithStats = async (id) => {
+const getProductDetailsWithStats = async (id) => {
   // 1. Get product details (with inventory)
   const product = await Product.findByPk(id, {
     include: [
@@ -208,4 +215,36 @@ exports.getProductDetailsWithStats = async (id) => {
   };
 };
 
-module.exports = { productCardDTO }; 
+const getProductsByGenreId = async (genreId) => {
+  const products = await Product.findAll({
+    include: [
+      { model: NewBook, required: false },
+      { model: Genre, where: { id: genreId }, through: { attributes: [] } },
+      { model: Inventory, required: false },
+    ],
+  });
+  return products.map(productCardDTO);
+};
+
+const getProductsByAudienceId = async (audienceId) => {
+  const products = await Product.findAll({
+    include: [
+      { model: NewBook, required: false },
+      { model: Audience, where: { id: audienceId }, through: { attributes: [] } },
+      { model: Inventory, required: false },
+    ],
+  });
+  return products.map(productCardDTO);
+};
+
+module.exports = {
+  createProduct,
+  updateProduct,
+  deleteProduct,
+  listProducts,
+  getProductDetails,
+  getProductDetailsWithStats,
+  getProductsByGenreId,
+  getProductsByAudienceId,
+  productCardDTO
+}; 

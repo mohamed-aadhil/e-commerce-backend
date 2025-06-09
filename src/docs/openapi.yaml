@@ -97,6 +97,8 @@ paths:
                   $ref: '#/components/schemas/ProductCard'
     post:
       summary: Create a new product
+      security:
+        - bearerAuth: []
       requestBody:
         required: true
         content:
@@ -128,6 +130,8 @@ paths:
                 $ref: '#/components/schemas/ProductDetails'
     put:
       summary: Update a product
+      security:
+        - bearerAuth: []
       parameters:
         - in: path
           name: id
@@ -149,6 +153,8 @@ paths:
                 $ref: '#/components/schemas/Product'
     delete:
       summary: Delete a product
+      security:
+        - bearerAuth: []
       parameters:
         - in: path
           name: id
@@ -181,6 +187,8 @@ paths:
   /products/{id}/restock:
     post:
       summary: Restock a product
+      security:
+        - bearerAuth: []
       parameters:
         - in: path
           name: id
@@ -249,6 +257,8 @@ paths:
   /inventory/stats:
     get:
       summary: Get inventory stats for dashboard
+      security:
+        - bearerAuth: []
       responses:
         '200':
           description: Inventory stats
@@ -259,6 +269,8 @@ paths:
   /inventory/books:
     get:
       summary: Get book inventory table for dashboard
+      security:
+        - bearerAuth: []
       responses:
         '200':
           description: Book inventory table
@@ -280,6 +292,34 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/Genre'
+    post:
+      summary: Create a new genre (admin only)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+      responses:
+        '201':
+          description: Genre created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Genre'
+        '400':
+          description: Invalid input
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
   /audiences:
     get:
       summary: List all audiences
@@ -292,6 +332,80 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/Audience'
+    post:
+      summary: Create a new audience (admin only)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+      responses:
+        '201':
+          description: Audience created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Audience'
+        '400':
+          description: Invalid input
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /genres/{id}/products:
+    get:
+      summary: List products by genre
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+          description: Genre ID
+      responses:
+        '200':
+          description: List of products for the given genre
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProductCard'
+        '404':
+          description: Genre not found
+        '500':
+          description: Server error
+  /audiences/{id}/products:
+    get:
+      summary: List products by audience
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+          description: Audience ID
+      responses:
+        '200':
+          description: List of products for the given audience
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProductCard'
+        '404':
+          description: Audience not found
+        '500':
+          description: Server error
 components:
   schemas:
     RegisterRequest:
@@ -534,4 +648,9 @@ components:
         id:
           type: integer
         name:
-          type: string 
+          type: string
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT 

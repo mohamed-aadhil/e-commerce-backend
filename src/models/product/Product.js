@@ -24,6 +24,10 @@ const Product = sequelize.define('Product', {
     type: DataTypes.JSONB,
     allowNull: true,
   },
+  images: {
+    type: DataTypes.JSONB,
+    allowNull: true,
+  },
   created_at: {
     type: DataTypes.DATE,
     defaultValue: DataTypes.NOW,

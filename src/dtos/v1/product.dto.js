@@ -7,19 +7,23 @@ const createProductValidation = [
   body('price')
     .isFloat({ gt: 0 }).withMessage('Price must be a positive number'),
   body('product_type')
-    .isIn(['new_book']).withMessage('Only "new_book" is supported at this time'),
+    .isIn(['New Book']).withMessage('Only "New Book" is supported at this time'),
   body('metadata')
     .optional()
     .isObject().withMessage('Metadata must be an object'),
   body('images')
     .optional()
-    .isArray().withMessage('Images must be an array of URLs'),
+    .isArray().withMessage('Images must be an array of URLs')
+    .custom((arr) => arr.every(img => typeof img === 'string' && img.trim() !== '')).withMessage('Each image must be a non-empty string'),
+  body('images.*')
+    .optional()
+    .isURL().withMessage('Each image must be a valid URL'),
   // Author required for new_book
   body('author')
     .isString().withMessage('Author is required for new books'),
-  // For future: used_book fields
+  // For future: Used book fields
   body('condition')
-    .if(body('product_type').equals('used_book'))
+    .if(body('product_type').equals('Used book'))
     .isString().withMessage('Condition is required for used books'),
   // For future: ebook fields
   body('file_format')
@@ -50,13 +54,17 @@ const updateProductValidation = [
     .isObject().withMessage('Metadata must be an object'),
   body('images')
     .optional()
-    .isArray().withMessage('Images must be an array of URLs'),
+    .isArray().withMessage('Images must be an array of URLs')
+    .custom((arr) => arr.every(img => typeof img === 'string' && img.trim() !== '')).withMessage('Each image must be a non-empty string'),
+  body('images.*')
+    .optional()
+    .isURL().withMessage('Each image must be a valid URL'),
   body('author')
     .optional()
     .isString().withMessage('Author must be a string'),
-  // For future: used_book fields
+  // For future: Used book fields
   body('condition')
-    .if(body('product_type').equals('used_book'))
+    .if(body('product_type').equals('Used book'))
     .isString().withMessage('Condition is required for used books'),
   // For future: ebook fields
   body('file_format')

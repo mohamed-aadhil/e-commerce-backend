@@ -1,19 +1,41 @@
 const jwt = require('jsonwebtoken');
-const { User } = require('../models/user/User');
+const dotenv = require('dotenv');
+dotenv.config();
+const User = require('../models/user/User');
+
 
 // Authentication middleware: verifies JWT and attaches user info to req.user
 const authenticate = async (req, res, next) => {
   const authHeader = req.headers.authorization;
+  console.log('--- AUTHENTICATE MIDDLEWARE ---');
+  console.log('Authorization Header:', authHeader);
+
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    console.log('No token provided or header format incorrect');
     return res.status(401).json({ error: 'No token provided' });
   }
+
   const token = authHeader.split(' ')[1];
+  console.log('Extracted Access Token:', token);
+
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const secret = process.env.JWT_SECRET;
+    console.log('JWT Secret Used:', secret);
+
+    const decoded = jwt.verify(token, secret);
+    console.log('Decoded JWT Payload:', decoded);
+
     // Optionally fetch user from DB if you want fresh user info
-    req.user = decoded; // or await User.findByPk(decoded.id)
+    const user = await User.findByPk(decoded.id);
+    if (!user) {
+      console.log('User not found for ID:', decoded.id);
+      return res.status(401).json({ error: 'User not found' });
+    }
+    req.user = user;
+    console.log('Authenticated User:', user.id, user.email);
     next();
   } catch (err) {
+    console.log('JWT verification error:', err.message);
     return res.status(401).json({ error: 'Invalid or expired token' });
   }
 };
