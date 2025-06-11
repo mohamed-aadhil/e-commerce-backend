@@ -8,8 +8,8 @@ const { validateRequest } = require('../../middlewares/validation.middleware');
 // Restock inventory (admin only)
 router.post('/products/:id/restock', authenticate, authorize('admin'), restockValidation, validateRequest, inventoryController.restockProduct);
 
-// Get product inventory (public or admin)
-router.get('/products/:id/inventory', inventoryController.getProductInventory);
+// Get product inventory (admin only)
+router.get('/products/:id/inventory', authenticate, authorize('admin'), inventoryController.getProductInventory);
 
 // Inventory stats for dashboard (admin only)
 router.get('/inventory/stats', authenticate, authorize('admin'), inventoryController.getInventoryStats);
@@ -18,6 +18,6 @@ router.get('/inventory/stats', authenticate, authorize('admin'), inventoryContro
 router.get('/inventory/books', authenticate, authorize('admin'), inventoryController.getInventoryBooks);
 
 // Get product inventory transactions (admin only)
-router.get('/products/:id/inventory/transactions', inventoryController.getProductTransactionHistoryWithStock);
+router.get('/products/:id/inventory/transactions', authenticate, authorize('admin'), inventoryController.getProductTransactionHistoryWithStock);
 
 module.exports = router; 

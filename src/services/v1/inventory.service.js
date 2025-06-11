@@ -38,19 +38,25 @@ exports.getInventoryStats = async () => {
   const totalBooks = await Product.count();
   // Low stock items (stock < 10)
   const lowStockItems = await Inventory.count({ where: { quantity: { [Op.lt]: 10, [Op.gt]: 0 } } });
-  // Out of stock items (stock = 0)
-  const outOfStock = await Inventory.count({ where: { quantity: 0 } });
-  // Total value (sum of price * stock)
+  // Out of stock items (products with inventory quantity 0 or no inventory record)
+  const [results] = await sequelize.query(`
+    SELECT COUNT(*) AS count
+    FROM products p
+    LEFT JOIN inventory i ON i.product_id = p.id
+    WHERE i.quantity = 0 OR i.product_id IS NULL
+  `);
+  const outOfStock = Number(results[0].count);
+  // Total value (sum of price * stock, treat missing inventory as 0)
   const totalValueResult = await Product.findAll({
-    include: [{ model: Inventory }],
-    attributes: [],
+    include: [{ model: Inventory, required: false }],
+    attributes: ['price'],
     raw: true
   });
   let totalValue = 0;
   for (const row of totalValueResult) {
-    if (row['Inventory.quantity'] && row.price) {
-      totalValue += Number(row.price) * Number(row['Inventory.quantity']);
-    }
+    const quantity = Number(row['Inventory.quantity'] ?? 0);
+    const price = Number(row.price ?? 0);
+    totalValue += price * quantity;
   }
   return inventoryStatsDTO({ totalBooks, lowStockItems, totalValue, outOfStock });
 };

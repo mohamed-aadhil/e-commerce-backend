@@ -8,7 +8,9 @@ function productDetailsDTO(product) {
   }
   return {
     id: product.id,
-    name: product.title, // 'name' as per your request, mapped from 'title'
+    name: product.title,
+    title: product.title,
+    product_type: product.product_type,
     author: product.NewBook?.author || null,
     images: product.images || [],
     description: product.metadata?.description || null, // assuming description is in metadata

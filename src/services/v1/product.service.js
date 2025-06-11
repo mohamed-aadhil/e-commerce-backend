@@ -49,7 +49,20 @@ const createProduct = async (data) => {
       );
     }
 
-    // 4. Inventory logic removed from product creation
+    // 4. Inventory logic: create inventory record with initial stock
+    if (typeof data.initial_stock === 'number' && data.initial_stock >= 0) {
+      await Inventory.create({
+        product_id: product.id,
+        quantity: data.initial_stock,
+      }, { transaction: t });
+
+      // Create an inventory transaction for the initial stock
+      await InventoryTransaction.create({
+        product_id: product.id,
+        change: data.initial_stock,
+        reason: 'initial_stock',
+      }, { transaction: t });
+    }
 
     return product;
   });

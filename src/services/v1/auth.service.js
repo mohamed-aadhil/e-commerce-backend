@@ -7,22 +7,32 @@ const { Op } = require('sequelize');
 const SALT_ROUNDS = 10;
 
 async function register({ name, email, password }) {
+  console.log('[AUTH SERVICE] Register called with:', { name, email });
   const existing = await User.findOne({ where: { email } });
   if (existing) throw new Error('Email already registered');
   const password_hash = await bcrypt.hash(password, SALT_ROUNDS);
   const user = await User.create({ name, email, password_hash });
+  console.log('[AUTH SERVICE] User registered:', user.id);
   return user;
 }
 
 async function login({ email, password }) {
+  console.log('[AUTH SERVICE] Login called with:', { email });
   const user = await User.findOne({ where: { email } });
-  if (!user) throw new Error('Invalid credentials');
+  if (!user) {
+    console.log('[AUTH SERVICE] No user found for email:', email);
+    throw new Error('Invalid credentials');
+  }
   const valid = await bcrypt.compare(password, user.password_hash);
-  if (!valid) throw new Error('Invalid credentials');
+  if (!valid) {
+    console.log('[AUTH SERVICE] Invalid password for user:', user.id);
+    throw new Error('Invalid credentials');
+  }
   const accessToken = generateAccessToken({ id: user.id, role: user.role, name: user.name });
   const refreshToken = generateRefreshToken({ id: user.id });
   const expires_at = getRefreshTokenExpiryDate();
   await RefreshToken.create({ user_id: user.id, token: refreshToken, expires_at });
+  console.log('[AUTH SERVICE] Login successful for user:', user.id);
   return { user, accessToken, refreshToken };
 }
 

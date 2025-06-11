@@ -37,12 +37,14 @@ const createProductValidation = [
     .isArray({ min: 1 }).withMessage('At least one genre is required'),
   body('audience_ids')
     .isArray({ min: 1 }).withMessage('At least one audience is required'),
+  body('initial_stock')
+    .isInt({ min: 0 }).withMessage('Initial stock must be a non-negative integer'),
 ];
 
 const updateProductValidation = [
   body('product_type')
     .optional()
-    .isIn(['new_book']).withMessage('Only "new_book" is supported at this time'),
+    .isIn(['New Book']).withMessage('Only "New Book" is supported at this time'),
   body('title')
     .optional()
     .isString().withMessage('Title must be a string'),
