@@ -9,7 +9,11 @@ const SALT_ROUNDS = 10;
 async function register({ name, email, password }) {
   console.log('[AUTH SERVICE] Register called with:', { name, email });
   const existing = await User.findOne({ where: { email } });
-  if (existing) throw new Error('Email already registered');
+  if (existing) {
+    const error = new Error('Email already registered');
+    error.status = 409;
+    throw error;
+  }
   const password_hash = await bcrypt.hash(password, SALT_ROUNDS);
   const user = await User.create({ name, email, password_hash });
   console.log('[AUTH SERVICE] User registered:', user.id);
@@ -21,12 +25,16 @@ async function login({ email, password }) {
   const user = await User.findOne({ where: { email } });
   if (!user) {
     console.log('[AUTH SERVICE] No user found for email:', email);
-    throw new Error('Invalid credentials');
+    const error = new Error('Invalid credentials');
+    error.status = 401;
+    throw error;
   }
   const valid = await bcrypt.compare(password, user.password_hash);
   if (!valid) {
     console.log('[AUTH SERVICE] Invalid password for user:', user.id);
-    throw new Error('Invalid credentials');
+    const error = new Error('Invalid credentials');
+    error.status = 401;
+    throw error;
   }
   const accessToken = generateAccessToken({ id: user.id, role: user.role, name: user.name });
   const refreshToken = generateRefreshToken({ id: user.id });

@@ -9,7 +9,7 @@ function productCardDTO(product) {
   return {
     id: product.id,
     name: product.title,
-    author: product.NewBook?.author || null,
+    author: product.author || null,
     image: product.images && product.images.length > 0 ? product.images[0] : null,
     price: product.price,
     status,

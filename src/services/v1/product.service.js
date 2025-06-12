@@ -12,6 +12,28 @@ const createProduct = async (data) => {
       images = data.images.filter(img => typeof img === 'string' && img.trim() !== '');
     }
 
+    // Validate required fields
+    if (!data.title || !data.product_type || !data.author) {
+      const error = new Error('Title, product type, and author are required');
+      error.status = 400;
+      throw error;
+    }
+
+    // Check for duplicate product (product_type, title, author)
+    const existing = await Product.findOne({
+      where: {
+        product_type: data.product_type,
+        title: data.title,
+        author: data.author,
+      },
+      transaction: t
+    });
+    if (existing) {
+      const error = new Error('A product with the same type, title, and author already exists.');
+      error.status = 409;
+      throw error;
+    }
+
     // 1. Create base product
     const product = await Product.create({
       title: data.title,
@@ -19,19 +41,20 @@ const createProduct = async (data) => {
       product_type: data.product_type,
       metadata: data.metadata,
       images: images.length > 0 ? images : null, // store null if no valid images
+      author: data.author,
     }, { transaction: t });
 
     // 2. Type-specific table
     switch (data.product_type) {
       case 'New Book':
-        await NewBook.create({ product_id: product.id, author: data.author }, { transaction: t });
+        await NewBook.create({ product_id: product.id }, { transaction: t });
         break;
       // For future: Used Book, ebook
       case 'Used Book':
-        await UsedBook.create({ product_id: product.id, author: data.author, condition: data.condition }, { transaction: t });
+        await UsedBook.create({ product_id: product.id, condition: data.condition }, { transaction: t });
         break;
       case 'ebook':
-        await Ebook.create({ product_id: product.id, author: data.author, file_format: data.file_format, download_url: data.download_url }, { transaction: t });
+        await Ebook.create({ product_id: product.id, file_format: data.file_format, download_url: data.download_url }, { transaction: t });
         break;
     }
 
@@ -72,23 +95,41 @@ const updateProduct = async (id, data) => {
   return sequelize.transaction(async (t) => {
     // 1. Update base product
     const product = await Product.findByPk(id, { transaction: t });
-    if (!product) throw new Error('Product not found');
+    if (!product) {
+      const error = new Error('Product not found');
+      error.status = 404;
+      throw error;
+    }
+
+    // Check for duplicate product (product_type, title, author) if any of these fields are being updated
+    const newProductType = data.product_type ?? product.product_type;
+    const newTitle = data.title ?? product.title;
+    const newAuthor = data.author ?? product.author;
+    const duplicate = await Product.findOne({
+      where: {
+        product_type: newProductType,
+        title: newTitle,
+        author: newAuthor,
+        id: { [Op.ne]: id },
+      },
+      transaction: t
+    });
+    if (duplicate) {
+      const error = new Error('A product with the same type, title, and author already exists.');
+      error.status = 409;
+      throw error;
+    }
 
     await product.update({
       title: data.title ?? product.title,
       price: data.price ?? product.price,
       metadata: data.metadata ?? product.metadata,
       images: data.images ?? product.images,
+      author: data.author ?? product.author,
     }, { transaction: t });
 
     // 2. Update type-specific table (New Book for now)
-    if (product.product_type === 'New Book') {
-      const newBook = await NewBook.findOne({ where: { product_id: id }, transaction: t });
-      if (newBook && data.author) {
-        await newBook.update({ author: data.author }, { transaction: t });
-      }
-    }
-    // (future: handle Used Book, ebook)
+    // No author update needed in NewBook, UsedBook, or Ebook
 
     // 3. Update associations (replace all for simplicity)
     if (data.genre_ids) {
@@ -115,7 +156,11 @@ const updateProduct = async (id, data) => {
 const deleteProduct = async (id) => {
   return sequelize.transaction(async (t) => {
     const product = await Product.findByPk(id, { transaction: t });
-    if (!product) throw new Error('Product not found');
+    if (!product) {
+      const error = new Error('Product not found');
+      error.status = 404;
+      throw error;
+    }
     await product.destroy({ transaction: t });
     // All related records are deleted via ON DELETE CASCADE
     return;

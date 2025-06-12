@@ -28,6 +28,10 @@ const Product = sequelize.define('Product', {
     type: DataTypes.JSONB,
     allowNull: true,
   },
+  author: {
+    type: DataTypes.TEXT,
+    allowNull: false,
+  },
   created_at: {
     type: DataTypes.DATE,
     defaultValue: DataTypes.NOW,

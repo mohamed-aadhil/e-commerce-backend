@@ -3,7 +3,7 @@ function inventoryBookDTO(product) {
   return {
     productId: product.id, 
     name: product.title,
-    author: product.NewBook?.author || null,
+    author: product.author || null,
     genres: product.Genres ? product.Genres.map(g => g.name) : [],
     price: product.price,
     stock: quantity,

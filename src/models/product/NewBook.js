@@ -11,11 +11,7 @@ const NewBook = sequelize.define('NewBook', {
       key: 'id',
     },
     onDelete: 'CASCADE',
-  },
-  author: {
-    type: DataTypes.TEXT,
-    allowNull: false,
-  },
+  }
 }, {
   tableName: 'new_books',
   timestamps: false,

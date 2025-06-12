@@ -9,10 +9,13 @@ module.exports = {
      * Example:
      * await queryInterface.createTable('users', { id: Sequelize.INTEGER });
      */
-    await queryInterface.addColumn('products', 'images', {
-      type: Sequelize.JSONB,
-      allowNull: true,
-    });
+    const table = await queryInterface.describeTable('products');
+    if (!table.images) {
+      await queryInterface.addColumn('products', 'images', {
+        type: Sequelize.JSONB,
+        allowNull: true,
+      });
+    }
   },
 
   async down (queryInterface, Sequelize) {
@@ -22,6 +25,9 @@ module.exports = {
      * Example:
      * await queryInterface.dropTable('users');
      */
-    await queryInterface.removeColumn('products', 'images');
+    const table = await queryInterface.describeTable('products');
+    if (table.images) {
+      await queryInterface.removeColumn('products', 'images');
+    }
   }
 };

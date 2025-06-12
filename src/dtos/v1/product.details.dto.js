@@ -11,7 +11,7 @@ function productDetailsDTO(product) {
     name: product.title,
     title: product.title,
     product_type: product.product_type,
-    author: product.NewBook?.author || null,
+    author: product.author || null,
     images: product.images || [],
     description: product.metadata?.description || null, // assuming description is in metadata
     price: product.price,
