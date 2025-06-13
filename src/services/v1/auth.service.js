@@ -17,7 +17,12 @@ async function register({ name, email, password }) {
   const password_hash = await bcrypt.hash(password, SALT_ROUNDS);
   const user = await User.create({ name, email, password_hash });
   console.log('[AUTH SERVICE] User registered:', user.id);
-  return user;
+  const accessToken = generateAccessToken({ id: user.id, role: user.role, name: user.name });
+  const refreshToken = generateRefreshToken({ id: user.id });
+  const expires_at = getRefreshTokenExpiryDate();
+  await RefreshToken.create({ user_id: user.id, token: refreshToken, expires_at });
+  console.log('[AUTH SERVICE] Registration successful for user:', user.id);
+  return { user, accessToken, refreshToken };
 }
 
 async function login({ email, password }) {

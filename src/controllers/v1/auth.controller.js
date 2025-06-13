@@ -12,8 +12,13 @@ const REFRESH_COOKIE_OPTIONS = {
 
 exports.register = async (req, res, next) => {
   try {
-    const user = await authService.register(req.body);
-    res.status(201).json(new UserDto(user));
+    const { user, accessToken, refreshToken } = await authService.register(req.body);
+    // Set refresh token as httpOnly cookie
+    res.cookie('refreshToken', refreshToken, {
+      ...REFRESH_COOKIE_OPTIONS,
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    });
+    res.status(201).json(new AuthResponseDto(user, accessToken, refreshToken));
   } catch (err) {
     next(err);
   }

@@ -204,8 +204,20 @@ const getProductDetails = async (id) => {
       { model: NewBook, required: false },
       // For future: { model: UsedBook, required: false },
       // For future: { model: Ebook, required: false },
-      { model: Genre, through: { attributes: [] } },
-      { model: Audience, through: { attributes: [] } },
+      {
+        model: Genre,
+        through: {
+          model: BookGenre,
+          attributes: []
+        }
+      },
+      {
+        model: Audience,
+        through: {
+          model: BookAudience,
+          attributes: []
+        }
+      },
       { model: Inventory }
     ]
   });

@@ -1,4 +1,4 @@
-const { Inventory, InventoryTransaction, Product, NewBook, Genre, Audience } = require('../../models/product');
+const { Inventory, InventoryTransaction, Product, NewBook, Genre, Audience, BookGenre, BookAudience } = require('../../models/product');
 const { sequelize } = require('../../models/product/Product');
 const { Op, fn, col, literal } = require('sequelize');
 const { inventoryStatsDTO } = require('../../dtos/v1/inventory.stats.dto');
@@ -77,21 +77,67 @@ exports.getInventoryStats = async () => {
 };
 
 exports.getInventoryBooks = async (query) => {
-  // Optionally add filters (search, genre, etc.)
-  const where = {};
-  if (query.title) where.title = { [Op.iLike]: `%${query.title}%` };
-  const include = [
-    { model: Genre, through: { attributes: [] } },
-    { model: Audience, through: { attributes: [] } },
-    { model: Inventory }
-  ];
-  const products = await Product.findAll({ where, include });
-  if (!products || products.length === 0) {
-    const error = new Error('No inventory books found');
-    error.status = 404;
-    throw error;
-  }
-  return products.map(inventoryBookDTO);
+  exports.getInventoryBooks = async (query) => {
+    const where = {};
+    const page = parseInt(query.page, 10) || 1;
+    const limit = parseInt(query.limit, 10) || 10;
+    const offset = (page - 1) * limit;
+    
+    // Support searching by product ID or title
+    if (query.productId) {
+      where.id = query.productId;
+    } else if (query.title) {
+      where.title = { [Op.iLike]: `%${query.title}%` };
+    }
+    
+    const include = [
+      {
+        model: Genre,
+        through: { 
+          model: BookGenre,
+          attributes: []
+        },
+        attributes: ['id', 'name']
+      },
+      {
+        model: Audience,
+        through: { 
+          model: BookAudience,
+          attributes: []
+        },
+        attributes: ['id', 'name']
+      },
+      { 
+        model: Inventory,
+        attributes: ['quantity']
+      }
+    ];
+  
+    const { count, rows: products } = await Product.findAndCountAll({
+      where,
+      include,
+      limit,
+      offset,
+      order: [['created_at', 'DESC']],
+      distinct: true
+    });
+    
+    if (!products || products.length === 0) {
+      const error = new Error('No inventory books found');
+      error.status = 404;
+      throw error;
+    }
+    
+    return {
+      data: products.map(product => inventoryBookDTO(product)),
+      pagination: {
+        total: count,
+        page,
+        limit,
+        totalPages: Math.ceil(count / limit)
+      }
+    };
+  };
 };
 
 exports.getProductTransactionHistoryWithStock = async (productId, { from, to } = {}) => {

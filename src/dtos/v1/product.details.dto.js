@@ -18,7 +18,16 @@ function productDetailsDTO(product) {
     stock,
     status,
     metadata: product.metadata || {},
+    // Add genres and audiences
+    genres: (product.Genres || []).map(g => ({
+      id: g.id,
+      name: g.name
+    })),
+    audiences: (product.Audiences || []).map(a => ({
+      id: a.id,
+      name: a.name
+    }))
   };
 }
 
-module.exports = { productDetailsDTO }; 
+module.exports = { productDetailsDTO };
