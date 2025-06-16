@@ -1,4 +1,5 @@
-const { Genre } = require('../../models/product');
+const db = require('../../models');
+const { Genre } = db;
 
 exports.listGenres = async () => {
   return Genre.findAll();

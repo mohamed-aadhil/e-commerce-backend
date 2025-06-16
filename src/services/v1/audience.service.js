@@ -1,15 +1,17 @@
-const { Audience } = require('../../models/product');
+const db = require('../../models');
+const { Audience } = db;
 
 exports.listAudiences = async () => {
   return Audience.findAll();
 };
 
 exports.createAudience = async (data) => {
-  const existingGenre = await Genre.findOne({ where: { name: data.name } });
-  if (existingGenre) {
-    const error = new Error(`Genre "${data.name}" already exists`);
+  // Check if audience with the same name already exists
+  const existingAudience = await Audience.findOne({ where: { name: data.name } });
+  if (existingAudience) {
+    const error = new Error(`Audience "${data.name}" already exists`);
     error.status = 400;
     throw error;
   }
-  return Genre.create({ name: data.name });
-}; 
+  return Audience.create({ name: data.name });
+};

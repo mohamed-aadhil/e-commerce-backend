@@ -3,33 +3,44 @@ const sequelize = require('../../config/database');
 const Product = require('./Product');
 const Genre = require('./Genre');
 
-const BookGenre = sequelize.define('BookGenre', {
-  book_id: {
-    type: DataTypes.INTEGER,
-    primaryKey: true,
-    references: {
-      model: Product,
-      key: 'id',
+module.exports = (sequelize, DataTypes) => {
+  const BookGenre = sequelize.define('BookGenre', {
+    book_id: {
+      type: DataTypes.INTEGER,
+      primaryKey: true,
+      references: {
+        model: 'products',
+        key: 'id',
+      },
+      onDelete: 'CASCADE',
     },
-    onDelete: 'CASCADE',
-  },
-  genre_id: {
-    type: DataTypes.INTEGER,
-    primaryKey: true,
-    references: {
-      model: Genre,
-      key: 'id',
+    genre_id: {
+      type: DataTypes.INTEGER,
+      primaryKey: true,
+      references: {
+        model: 'genres',
+        key: 'id',
+      },
+      onDelete: 'CASCADE',
     },
-    onDelete: 'CASCADE',
-  },
-}, {
-  tableName: 'book_genres',
-  timestamps: false,
-});
+  }, {
+    tableName: 'book_genres',
+    timestamps: false,
+  });
 
-BookGenre.belongsTo(Product, { foreignKey: 'book_id', onDelete: 'CASCADE' });
-BookGenre.belongsTo(Genre, { foreignKey: 'genre_id', onDelete: 'CASCADE' });
-Product.belongsToMany(Genre, { through: BookGenre, foreignKey: 'book_id', otherKey: 'genre_id' });
-Genre.belongsToMany(Product, { through: BookGenre, foreignKey: 'genre_id', otherKey: 'book_id' });
+  BookGenre.associate = (models) => {
+    BookGenre.belongsTo(models.Product, {
+      foreignKey: 'book_id',
+      as: 'book',
+      onDelete: 'CASCADE'
+    });
+    
+    BookGenre.belongsTo(models.Genre, {
+      foreignKey: 'genre_id',
+      as: 'genre',
+      onDelete: 'CASCADE'
+    });
+  };
 
-module.exports = BookGenre; 
+  return BookGenre;
+};

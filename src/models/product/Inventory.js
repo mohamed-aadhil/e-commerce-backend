@@ -1,36 +1,51 @@
 const { DataTypes } = require('sequelize');
-const sequelize = require('../../config/database');
-const Product = require('./Product');
 
-const Inventory = sequelize.define('Inventory', {
-  id: {
-    type: DataTypes.INTEGER,
-    autoIncrement: true,
-    primaryKey: true,
-  },
-  product_id: {
-    type: DataTypes.INTEGER,
-    allowNull: false,
-    references: {
-      model: Product,
-      key: 'id',
+module.exports = (sequelize, DataTypes) => {
+  const Inventory = sequelize.define('Inventory', {
+    id: {
+      type: DataTypes.INTEGER,
+      autoIncrement: true,
+      primaryKey: true,
     },
-    onDelete: 'CASCADE',
-  },
-  quantity: {
-    type: DataTypes.INTEGER,
-    allowNull: false,
-  },
-  updated_at: {
-    type: DataTypes.DATE,
-    defaultValue: DataTypes.NOW,
-  },
-}, {
-  tableName: 'inventory',
-  timestamps: false,
-});
+    product_id: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      references: {
+        model: 'products',
+        key: 'id',
+      },
+      onDelete: 'CASCADE',
+    },
+    quantity: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      validate: {
+        min: 0
+      }
+    },
+    updated_at: {
+      type: DataTypes.DATE,
+      defaultValue: DataTypes.NOW,
+    },
+  }, {
+    tableName: 'inventory',
+    timestamps: false,
+    hooks: {
+      beforeValidate: (inventory) => {
+        if (inventory.quantity < 0) {
+          throw new Error('Quantity cannot be negative');
+        }
+      }
+    }
+  });
 
-Inventory.belongsTo(Product, { foreignKey: 'product_id', onDelete: 'CASCADE' });
-Product.hasOne(Inventory, { foreignKey: 'product_id', onDelete: 'CASCADE' });
+  Inventory.associate = (models) => {
+    Inventory.belongsTo(models.Product, {
+      foreignKey: 'product_id',
+      as: 'product',
+      onDelete: 'CASCADE'
+    });
+  };
 
-module.exports = Inventory; 
+  return Inventory;
+};

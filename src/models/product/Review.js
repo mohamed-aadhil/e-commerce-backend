@@ -1,48 +1,88 @@
-const { DataTypes } = require('sequelize');
-const sequelize = require('../../config/database');
-const User = require('../user/User');
-const Product = require('./Product');
-
-const Review = sequelize.define('Review', {
-  id: {
-    type: DataTypes.INTEGER,
-    autoIncrement: true,
-    primaryKey: true,
-  },
-  user_id: {
-    type: DataTypes.INTEGER,
-    allowNull: false,
-    references: {
-      model: User,
-      key: 'id',
+module.exports = (sequelize, DataTypes) => {
+  const Review = sequelize.define('Review', {
+    id: {
+      type: DataTypes.INTEGER,
+      autoIncrement: true,
+      primaryKey: true,
     },
-    onDelete: 'CASCADE',
-  },
-  product_id: {
-    type: DataTypes.INTEGER,
-    allowNull: false,
-    references: {
-      model: Product,
-      key: 'id',
+    user_id: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      references: {
+        model: 'users',
+        key: 'id',
+      },
+      onDelete: 'CASCADE',
     },
-    onDelete: 'CASCADE',
-  },
-  review_text: {
-    type: DataTypes.TEXT,
-    allowNull: false,
-  },
-  created_at: {
-    type: DataTypes.DATE,
-    defaultValue: DataTypes.NOW,
-  },
-}, {
-  tableName: 'reviews',
-  timestamps: false,
-});
+    product_id: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      references: {
+        model: 'products',
+        key: 'id',
+      },
+      onDelete: 'CASCADE',
+    },
+    title: {
+      type: DataTypes.TEXT,
+      allowNull: false,
+    },
+    review_text: {
+      type: DataTypes.TEXT,
+      allowNull: false,
+    },
+    rating: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      validate: {
+        min: 1,
+        max: 5,
+      },
+    },
+    is_approved: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
+    },
+    created_at: {
+      type: DataTypes.DATE,
+      defaultValue: DataTypes.NOW,
+    },
+    updated_at: {
+      type: DataTypes.DATE,
+      defaultValue: DataTypes.NOW,
+      onUpdate: DataTypes.NOW,
+    },
+  }, {
+    tableName: 'reviews',
+    timestamps: false,
+    underscored: true,
+    indexes: [
+      {
+        fields: ['product_id'],
+      },
+      {
+        fields: ['user_id', 'product_id'],
+        unique: true,
+        name: 'unique_user_product_review',
+      },
+    ],
+  });
 
-Review.belongsTo(User, { foreignKey: 'user_id', onDelete: 'CASCADE' });
-User.hasMany(Review, { foreignKey: 'user_id', onDelete: 'CASCADE' });
-Review.belongsTo(Product, { foreignKey: 'product_id', onDelete: 'CASCADE' });
-Product.hasMany(Review, { foreignKey: 'product_id', onDelete: 'CASCADE' });
+  Review.associate = (models) => {
+    // Review belongs to User
+    Review.belongsTo(models.User, {
+      foreignKey: 'user_id',
+      as: 'user',
+      onDelete: 'CASCADE'
+    });
+    
+    // Review belongs to Product
+    Review.belongsTo(models.Product, {
+      foreignKey: 'product_id',
+      as: 'product',
+      onDelete: 'CASCADE'
+    });
+  };
 
-module.exports = Review; 
+  return Review;
+};

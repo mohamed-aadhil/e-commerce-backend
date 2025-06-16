@@ -1,65 +1,66 @@
 const express = require('express');
-const { body, param } = require('express-validator');
-const {
-  getCart,
-  addItem,
-  updateItem,
-  removeItem,
-  clearCart,
-  mergeCarts
-} = require('../../controllers/v1/cart-controller');
-const { validateRequest } = require('../../middlewares/validation.middleware');
-const { authenticate } = require('../../middlewares/auth.middleware');
-
 const router = express.Router();
+const cartController = require('../../controllers/v1/cart.controller');
+const { cartValidation } = require('../../dtos/v1/cart.dto');
+const { validateRequest } = require('../../middlewares/validation.middleware');
+const jwt = require('jsonwebtoken');
+const db = require('../../models');
+const { User } = db;
 
-// Apply authentication middleware to all routes except GET /cart
-// The authenticate middleware will still allow unauthenticated requests but will attach user if available
-router.use(authenticate({ required: false }));
+const optionalAuth = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return next();
+  }
+  
+  const token = authHeader.split(' ')[1];
+  
+  try {
+    const secret = process.env.JWT_SECRET;
+    const decoded = jwt.verify(token, secret);
+    
+    // Attach user to request if token is valid
+    User.findByPk(decoded.id)
+      .then(user => {
+        if (user) {
+          req.user = user;
+        }
+        next();
+      })
+      .catch(next);
+  } catch (err) {
+    // If token is invalid, just continue without user
+    next();
+  }
+};
 
-// GET /api/v1/cart - Get current cart (creates one if doesn't exist)
-router.get('/', getCart);
+// Apply optional authentication middleware
+router.use(optionalAuth);
 
-// POST /api/v1/cart/items - Add item to cart
-router.post(
-  '/items',
-  [
-    body('productId').isInt({ min: 1 }).withMessage('Valid product ID is required'),
-    body('quantity').optional().isInt({ min: 1 }).withMessage('Quantity must be at least 1'),
-  ],
-  validateRequest,
-  addItem
-);
+// Get current cart
+router.get('/', cartController.getCart);
 
-// PUT /api/v1/cart/items/:productId - Update item quantity in cart
-router.put(
-  '/items/:productId',
-  [
-    param('productId').isInt({ min: 1 }).withMessage('Valid product ID is required'),
-    body('quantity').isInt({ min: 0 }).withMessage('Valid quantity is required'),
-  ],
-  validateRequest,
-  updateItem
-);
+// Add item to cart
+router.post('/items', cartValidation.addItem, validateRequest, cartController.addItem);
 
-// DELETE /api/v1/cart/items/:productId - Remove item from cart
-router.delete(
-  '/items/:productId',
-  [
-    param('productId').isInt({ min: 1 }).withMessage('Valid product ID is required'),
-  ],
-  validateRequest,
-  removeItem
-);
+// Update item quantity in cart
+router.put('/items/:productId', cartValidation.updateItem, validateRequest, cartController.updateItem);
 
-// DELETE /api/v1/cart - Clear all items from cart
-router.delete('/', clearCart);
+// Remove item from cart
+router.delete('/items/:productId', cartController.removeItem);
 
-// POST /api/v1/cart/merge - Merge guest cart with user cart (after login)
-router.post(
-  '/merge',
-  authenticate({ required: true }), // This one requires authentication
-  mergeCarts
-);
+// Clear all items from cart
+router.delete('/', cartController.clearCart);
+
+// Merge guest cart with user cart after login
+router.post('/merge', (req, res, next) => {
+  if (!req.user) {
+    const error = new Error('User not authenticated');
+    error.status = 401;
+    return next(error);
+  }
+  next();
+}, cartController.mergeCarts);
 
 module.exports = router;

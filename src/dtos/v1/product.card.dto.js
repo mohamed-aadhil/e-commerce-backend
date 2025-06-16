@@ -1,6 +1,6 @@
 function productCardDTO(product) {
-  const stock = product.Inventory?.quantity ?? 0;
-  let status = 'Active';
+  const stock = product.inventory?.quantity ?? 0;
+  let status = 'In Stock';
   if (stock === 0) {
     status = 'Out of Stock';
   } else if (stock < 10) {
@@ -10,10 +10,13 @@ function productCardDTO(product) {
     id: product.id,
     name: product.title,
     author: product.author || null,
-    image: product.images && product.images.length > 0 ? product.images[0] : null,
-    price: product.price,
-    status,
+    images: product.images || [],
+    selling_price: product.selling_price,
+    status: status,
+    inventory: {
+      quantity: stock
+    }
   };
 }
 
-module.exports = { productCardDTO }; 
+module.exports = { productCardDTO };

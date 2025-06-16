@@ -1,282 +1,447 @@
 const { Op } = require('sequelize');
-const { Cart, CartItem, Product, Inventory } = require('../../models');
-const { formatCart } = require('../../dtos/v1/cart.dto');
+const db = require('../../models');
+const { Cart, CartItem, Product, Inventory } = db;
 
-/**
- * Get or create a cart for a user
- * @param {number|null} userId - User ID or null for guest
- * @returns {Promise<Object>} Cart object with items
- */
-const getOrCreateCart = async (userId) => {
-  try {
-    let cart;
-    
-    if (userId) {
-      // For logged-in users, find or create their cart
-      [cart] = await Cart.findOrCreate({
-        where: { user_id: userId },
-        include: [{
-          model: CartItem,
-          include: [Product]
-        }],
-        defaults: { user_id: userId }
-      });
-    } else {
-      // For guests, create a new cart without a user ID
-      cart = await Cart.create({}, {
-        include: [CartItem]
-      });
-    }
-
-    // Ensure we have the latest items
-    const cartWithItems = await Cart.findByPk(cart.id, {
-      include: [{
-        model: CartItem,
-        include: [Product]
-      }]
-    });
-
-    return formatCart(cartWithItems);
-  } catch (error) {
-    console.error('Error in getOrCreateCart:', error);
-    throw new Error('Failed to get or create cart');
+// Common include options for cart queries
+const cartIncludeOptions = [
+  {
+    model: CartItem,
+    as: 'items',
+    include: [
+      {
+        model: Product,
+        as: 'product',
+        attributes: ['id', 'title', 'selling_price', 'images'],
+        include: [
+          {
+            model: Inventory,
+            as: 'inventory',
+            attributes: ['quantity']
+          }
+        ]
+      }
+    ]
   }
-};
+];
 
 /**
- * Get cart with items
- * @param {number} cartId - Cart ID
- * @returns {Promise<Object>} Cart with items
+ * Get or create a cart for a user or guest
+ * @param {string} sessionId - Session ID (required for both guests and users)
+ * @param {number} [userId] - User ID if authenticated
+ * @returns {Promise<Cart>} The cart object
  */
-const getCart = async (cartId) => {
-  try {
-    const cart = await Cart.findByPk(cartId, {
-      include: [{
-        model: CartItem,
-        include: [{
-          model: Product,
-          include: [Inventory]
-        }]
-      }]
-    });
+async function getOrCreateCart(sessionId, userId = null, options = {}) {
+  const { transaction } = options;
+  console.log(`[CART SERVICE] getOrCreateCart - Session: ${sessionId}, User: ${userId}`);
+  
+  // Log the current time to help track the request
+  console.log(`[CART SERVICE] getOrCreateCart request time: ${new Date().toISOString()}`);
+  
+  const findOrCreateCart = async (t) => {
+    try {
+      // Try to find existing cart
+      const whereClause = userId 
+        ? { user_id: userId, is_guest: false }
+        : { session_id: sessionId, is_guest: true };
+      
+      console.log(`[CART SERVICE] Looking for cart with:`, JSON.stringify(whereClause, null, 2));
+      
+      let cart = await Cart.findOne({
+        where: whereClause,
+        include: [
+          {
+            model: CartItem,
+            as: 'items',
+            include: [{
+              model: db.Product,
+              as: 'product',
+              include: [{
+                model: db.Inventory,
+                as: 'inventory',
+                required: false
+              }]
+            }]
+          }
+        ],
+        transaction: t
+      });
+      
+      console.log(`[CART SERVICE] Found cart: ${cart ? 'Yes' : 'No'}`);
+      if (cart) {
+        console.log(`[CART SERVICE] Cart details:`, {
+          id: cart.id,
+          userId: cart.user_id,
+          sessionId: cart.session_id,
+          isGuest: cart.is_guest,
+          itemCount: cart.items?.length || 0,
+          createdAt: cart.createdAt,
+          updatedAt: cart.updatedAt
+        });
+      }
 
-    if (!cart) {
-      throw new Error('Cart not found');
+      if (cart) {
+        console.log(`[CART SERVICE] Found existing cart: ${cart.id} with ${cart.items?.length || 0} items`);
+      } else {
+        console.log(`[CART SERVICE] No cart found, creating new one`);
+        // If no cart exists, create a new one
+        cart = await Cart.create({
+          user_id: userId || null,
+          session_id: userId ? null : sessionId,
+          is_guest: !userId,
+        }, { transaction: t });
+        
+        console.log(`[CART SERVICE] Created new cart: ${cart.id}`);
+        
+        // Reload with includes
+        cart = await Cart.findByPk(cart.id, {
+          include: cartIncludeOptions,
+          transaction: t
+        });
+        
+        console.log(`[CART SERVICE] Reloaded cart with ${cart.items?.length || 0} items`);
+      }
+
+      return cart;
+    } catch (error) {
+      console.error('[CART SERVICE] Error in getOrCreateCart:', error);
+      throw error;
     }
+  };
 
-    return formatCart(cart);
-  } catch (error) {
-    console.error('Error in getCart:', error);
-    throw error;
+  // Use existing transaction or create a new one
+  if (transaction) {
+    return findOrCreateCart(transaction);
   }
-};
+  
+  return db.sequelize.transaction(findOrCreateCart);
+}
 
 /**
- * Add an item to the cart or update quantity if it exists
- * @param {number} cartId - Cart ID
+ * Add or update item in cart
+ * @param {string} sessionId - Session ID
  * @param {number} productId - Product ID to add
  * @param {number} quantity - Quantity to add
+ * @param {number} [userId] - User ID if authenticated
  * @returns {Promise<Object>} Updated cart
  */
-const addOrUpdateItem = async (cartId, productId, quantity) => {
-  const transaction = await Cart.sequelize.transaction();
-  
-  try {
-    // Check if product exists and is in stock
-    const product = await Product.findByPk(productId, {
-      include: [Inventory]
-    });
-
-    if (!product) {
-      throw new Error('Product not found');
-    }
-
-    // Check inventory
-    const inventory = product.Inventory;
-    if (!inventory || inventory.quantity < quantity) {
-      throw new Error('Insufficient stock');
-    }
-
-    // Find or create cart item
-    const [cartItem, created] = await CartItem.findOrCreate({
+async function addItem(sessionId, productId, quantity, userId = null) {
+  return db.sequelize.transaction(async (transaction) => {
+    // Get or create cart
+    const cart = await getOrCreateCart(sessionId, userId, { transaction });
+    
+    // Find existing cart item
+    // Check if item already exists in cart
+    const existingItem = await CartItem.findOne({
       where: { 
-        cart_id: cartId,
-        product_id: productId
+        cart_id: cart.id, 
+        product_id: productId 
       },
-      defaults: { quantity: 0 },
       transaction
     });
 
-    // Update quantity
-    const newQuantity = created ? quantity : cartItem.quantity + quantity;
-    await cartItem.update({ quantity: newQuantity }, { transaction });
+    if (existingItem) {
+      // If item exists, use updateItem to handle the quantity update
+      return updateItem(sessionId, productId, existingItem.quantity + quantity, userId);
+    }
 
-    await transaction.commit();
+    // For new items, check inventory and create the item
+    const productDetails = await Product.findByPk(productId, { 
+      attributes: ['id', 'selling_price'],
+      transaction,
+      include: [{
+        model: db.Inventory,
+        as: 'inventory',
+        attributes: ['quantity'],
+        required: false
+      }]
+    });
+
+    if (!productDetails) {
+      const error = new Error('Product not found');
+      error.status = 404;
+      throw error;
+    }
+
+    // Check available inventory
+    const availableQuantity = productDetails.inventory?.quantity || 0;
+    if (availableQuantity <= 0) {
+      const error = new Error('Product is out of stock');
+      error.status = 400;
+      throw error;
+    }
+
+    const finalQuantity = Math.min(quantity, availableQuantity);
+    if (finalQuantity <= 0) {
+      const error = new Error('Invalid quantity');
+      error.status = 400;
+      throw error;
+    }
+
+    // Create new cart item with the requested quantity
+    await CartItem.create({
+      cart_id: cart.id,
+      product_id: productId,
+      quantity: finalQuantity,
+      price: productDetails.selling_price
+    }, { transaction });
 
     // Return updated cart
-    return getCart(cartId);
-  } catch (error) {
-    await transaction.rollback();
-    console.error('Error in addOrUpdateItem:', error);
-    throw error;
+    return cart.reload({
+      include: cartIncludeOptions,
+      transaction
+    });
+  });
+}
+
+/**
+ * Merge guest cart with user cart after login
+ * @param {string} sessionId - Guest session ID
+ * @param {number} userId - User ID
+ * @returns {Promise<Cart>} Merged cart
+ */
+async function mergeCarts(sessionId, userId, options = {}) {
+  const { transaction: externalTransaction } = options;
+  console.log(`[CART SERVICE] ====== STARTING CART MERGE ======`);
+  console.log(`[CART SERVICE] Session ID: ${sessionId}`);
+  console.log(`[CART SERVICE] User ID: ${userId}`);
+  console.log(`[CART SERVICE] Transaction: ${externalTransaction ? 'External' : 'New'}`);
+  console.log(`[CART SERVICE] Current time: ${new Date().toISOString()}`);
+  
+  const mergeCartsTransaction = async (t) => {
+    try {
+      // Find guest cart with all items
+      console.log(`[CART SERVICE] Looking for guest cart with sessionId: ${sessionId}`);
+      
+      // Log all carts with this session ID for debugging
+      const allCarts = await Cart.findAll({
+        where: { session_id: sessionId },
+        raw: true
+      });
+      console.log(`[CART SERVICE] Found ${allCarts.length} carts with session ID ${sessionId}:`, allCarts);
+      
+      const guestCart = await Cart.findOne({
+        where: { 
+          session_id: sessionId, 
+          is_guest: true 
+        },
+        include: [
+          {
+            model: CartItem,
+            as: 'items',
+            include: [{
+              model: db.Product,
+              as: 'product',
+              include: [{
+                model: db.Inventory,
+                as: 'inventory',
+                required: false
+              }]
+            }]
+          }
+        ],
+        transaction: t
+      });
+
+      if (!guestCart) {
+        console.log(`[CART SERVICE] No guest cart found for session: ${sessionId}`);
+        // Check if there are any carts with this session ID at all
+        const anyCart = await Cart.findOne({
+          where: { session_id: sessionId },
+          transaction: t
+        });
+        console.log(`[CART SERVICE] Any cart with session ${sessionId}:`, anyCart ? 'Found' : 'Not found');
+        return null;
+      }
+      
+      console.log(`[CART SERVICE] Found guest cart with ${guestCart.items?.length || 0} items`);
+      if (guestCart.items && guestCart.items.length > 0) {
+        console.log('[CART SERVICE] Guest cart items:', 
+          guestCart.items.map(item => ({
+            id: item.id,
+            productId: item.product_id,
+            quantity: item.quantity,
+            product: item.product ? {
+              id: item.product.id,
+              title: item.product.title
+            } : 'No product details'
+          }))
+        );
+      }
+
+      // Get or create user cart
+      console.log(`[CART SERVICE] Getting or creating user cart for user: ${userId}`);
+      const userCart = await getOrCreateCart(sessionId, userId, { transaction: t });
+      console.log(`[CART SERVICE] User cart ID: ${userCart.id}`);
+
+      // If guest cart has items, merge them
+      if (guestCart.items && guestCart.items.length > 0) {
+        console.log(`[CART SERVICE] Merging ${guestCart.items.length} items from guest cart`);
+        
+        for (const guestItem of guestCart.items) {
+          console.log(`[CART SERVICE] Processing item - Product: ${guestItem.product_id}, Qty: ${guestItem.quantity}`);
+          
+          // First, try to find an existing cart item
+          let userItem = await CartItem.findOne({
+            where: { 
+              cart_id: userCart.id, 
+              product_id: guestItem.product_id 
+            },
+            transaction: t
+          });
+
+          // If item doesn't exist, create it with the guest item's quantity (ensuring it's at least 1)
+          if (!userItem) {
+            console.log(`[CART SERVICE] Creating new cart item with quantity: ${Math.max(1, guestItem.quantity || 1)}`);
+            userItem = await CartItem.create({
+              cart_id: userCart.id,
+              product_id: guestItem.product_id,
+              quantity: Math.max(1, guestItem.quantity || 1), // Ensure minimum quantity of 1
+              price: guestItem.price
+            }, { transaction: t });
+          }
+
+          console.log(`[CART SERVICE] Found/created user cart item. Old Qty: ${userItem.quantity}, Adding: ${guestItem.quantity}`);
+
+          // Ensure quantity is at least 1
+          const newQuantity = Math.max(1, (userItem.quantity || 0) + (guestItem.quantity || 1));
+          
+          console.log(`[CART SERVICE] Updating item quantity - Existing: ${userItem.quantity || 0}, Adding: ${guestItem.quantity || 1}, New: ${newQuantity}`);
+          
+          await userItem.update(
+            { quantity: newQuantity },
+            { 
+              transaction: t,
+              validate: false // Skip validation since we're ensuring the quantity is valid
+            }
+          );
+          
+          console.log(`[CART SERVICE] Successfully updated item quantity to ${newQuantity}`);
+        }
+        
+        // Delete guest cart
+        console.log(`[CART SERVICE] Deleting guest cart: ${guestCart.id}`);
+        await guestCart.destroy({ transaction: t });
+        console.log('[CART SERVICE] Guest cart deleted');
+      } else {
+        console.log('[CART SERVICE] No items in guest cart to merge');
+      }
+
+      // Return updated user cart
+      console.log('[CART SERVICE] Reloading user cart with items');
+      const updatedCart = await userCart.reload({
+        include: cartIncludeOptions,
+        transaction: t
+      });
+      
+      console.log(`[CART SERVICE] Cart merge completed. Final item count: ${updatedCart.items?.length || 0}`);
+      return updatedCart;
+      
+    } catch (error) {
+      console.error('[CART SERVICE] Error in mergeCarts:', error);
+      throw error;
+    }
+  };
+
+  // Use existing transaction or create a new one
+  if (externalTransaction) {
+    return mergeCartsTransaction(externalTransaction);
   }
-};
+  
+  return db.sequelize.transaction(mergeCartsTransaction);
+}
 
 /**
  * Update item quantity in cart
- * @param {number} cartId - Cart ID
+ * @param {string} sessionId - Session ID
  * @param {number} productId - Product ID to update
  * @param {number} quantity - New quantity
+ * @param {number} [userId] - User ID if authenticated
  * @returns {Promise<Object>} Updated cart
  */
-const updateItemQuantity = async (cartId, productId, quantity) => {
-  const transaction = await Cart.sequelize.transaction();
+async function updateItem(sessionId, productId, quantity, userId = null) {
+  // Get the cart first
+  const cart = await getOrCreateCart(sessionId, userId);
   
-  try {
-    if (quantity <= 0) {
-      return removeItem(cartId, productId);
-    }
+  // Find the cart item with product and inventory
+  const cartItem = await CartItem.findOne({
+    where: {
+      cart_id: cart.id,
+      product_id: productId
+    },
+    include: [{
+      model: Product,
+      as: 'product',
+      include: [{
+        model: Inventory,
+        as: 'inventory'
+      }]
+    }]
+  });
 
-    // Check inventory
-    const product = await Product.findByPk(productId, {
-      include: [Inventory]
-    });
-
-    if (!product) {
-      throw new Error('Product not found');
-    }
-
-    if (product.Inventory.quantity < quantity) {
-      throw new Error('Insufficient stock');
-    }
-
-    // Update cart item
-    const [updated] = await CartItem.update(
-      { quantity },
-      { 
-        where: { 
-          cart_id: cartId, 
-          product_id: productId 
-        },
-        transaction
-      }
-    );
-
-    if (updated === 0) {
-      throw new Error('Item not found in cart');
-    }
-
-    await transaction.commit();
-    return getCart(cartId);
-  } catch (error) {
-    await transaction.rollback();
-    console.error('Error in updateItemQuantity:', error);
-    throw error;
+  if (!cartItem) {
+    throw new Error('Item not found in cart');
   }
-};
+
+  // Update quantity
+  cartItem.quantity = quantity;
+  await cartItem.save();
+
+  // Return updated cart
+  return getOrCreateCart(sessionId, userId);
+}
 
 /**
- * Remove an item from the cart
- * @param {number} cartId - Cart ID
+ * Remove item from cart
+ * @param {string} sessionId - Session ID
  * @param {number} productId - Product ID to remove
+ * @param {number} [userId] - User ID if authenticated
  * @returns {Promise<Object>} Updated cart
  */
-const removeItem = async (cartId, productId) => {
-  try {
+async function removeItem(sessionId, productId, userId = null) {
+  // Get the cart with items
+  const cart = await getOrCreateCart(sessionId, userId);
+  
+  // Delete the cart item within a transaction
+  return db.sequelize.transaction(async (transaction) => {
     await CartItem.destroy({
       where: {
-        cart_id: cartId,
+        cart_id: cart.id,
         product_id: productId
-      }
+      },
+      transaction
     });
 
-    return getCart(cartId);
-  } catch (error) {
-    console.error('Error in removeItem:', error);
-    throw new Error('Failed to remove item from cart');
-  }
-};
+    // Return updated cart with all associations
+    return getOrCreateCart(sessionId, userId, { transaction });
+  });
+}
 
 /**
- * Clear all items from the cart
- * @param {number} cartId - Cart ID
+ * Clear all items from cart
+ * @param {string} sessionId - Session ID
+ * @param {number} [userId] - User ID if authenticated
  * @returns {Promise<Object>} Empty cart
  */
-const clearCart = async (cartId) => {
-  try {
-    await CartItem.destroy({
-      where: { cart_id: cartId }
-    });
-
-    return getCart(cartId);
-  } catch (error) {
-    console.error('Error in clearCart:', error);
-    throw new Error('Failed to clear cart');
-  }
-};
-
-/**
- * Merge guest cart with user cart on login
- * @param {number} guestCartId - Guest cart ID
- * @param {number} userId - User ID
- * @returns {Promise<Object>} Merged cart
- */
-const mergeCarts = async (guestCartId, userId) => {
-  const transaction = await Cart.sequelize.transaction();
+async function clearCart(sessionId, userId = null) {
+  // Get the cart first
+  const cart = await getOrCreateCart(sessionId, userId);
   
-  try {
-    // Get or create user cart
-    const [userCart] = await Cart.findOrCreate({
-      where: { user_id: userId },
+  // Delete all cart items within a transaction
+  return db.sequelize.transaction(async (transaction) => {
+    await CartItem.destroy({
+      where: { cart_id: cart.id },
       transaction
     });
 
-    // Get guest cart items
-    const guestCartItems = await CartItem.findAll({
-      where: { cart_id: guestCartId },
-      transaction
-    });
-
-    // Move items to user cart
-    for (const item of guestCartItems) {
-      const [existingItem] = await CartItem.findOrCreate({
-        where: {
-          cart_id: userCart.id,
-          product_id: item.product_id
-        },
-        defaults: {
-          quantity: 0
-        },
-        transaction
-      });
-
-      // Update quantity
-      await existingItem.update({
-        quantity: existingItem.quantity + item.quantity
-      }, { transaction });
-    }
-
-    
-    // Delete guest cart
-    await Cart.destroy({
-      where: { id: guestCartId },
-      transaction
-    });
-
-    await transaction.commit();
-    return getCart(userCart.id);
-  } catch (error) {
-    await transaction.rollback();
-    console.error('Error in mergeCarts:', error);
-    throw new Error('Failed to merge carts');
-  }
-};
+    // Return empty cart with all associations
+    return getOrCreateCart(sessionId, userId, { transaction });
+  });
+}
 
 module.exports = {
   getOrCreateCart,
-  getCart,
-  addOrUpdateItem,
-  updateItemQuantity,
+  addItem,
+  updateItem,
   removeItem,
   clearCart,
   mergeCarts

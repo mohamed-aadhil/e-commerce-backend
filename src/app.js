@@ -3,9 +3,10 @@ const cors = require('cors');
 const app = express();
 const dotenv = require('dotenv');
 const cookieParser = require('cookie-parser');
+const session = require('express-session');
 const routes = require('./routes');
 const { errorHandler } = require('./middlewares/error.middleware');
-const sequelize = require('./config/database');
+const sessionStore = require('./config/session-store');
 
 // Swagger UI setup
 const swaggerUi = require('swagger-ui-express');
@@ -14,37 +15,113 @@ const swaggerDocument = YAML.load(__dirname + '/docs/openapi.yaml');
 
 dotenv.config();
 
-app.set('etag', false);
+console.log('Environment:', process.env.NODE_ENV || 'development');
+
+// Session configuration
+const isProduction = process.env.NODE_ENV === 'production';
+const sessionConfig = {
+  secret: process.env.SESSION_SECRET || 'your-secret-key-change-this-in-production',
+  resave: false,
+  saveUninitialized: true, // Changed to true to track guest sessions
+  store: sessionStore,
+  proxy: true, // Trust the reverse proxy
+  cookie: {
+    secure: isProduction, // Set to true in production, false in development
+    httpOnly: true,
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    sameSite: isProduction ? 'none' : 'lax',
+    path: '/',
+    domain: isProduction ? '.yourapp.com' : 'localhost' // Adjust domain for production
+  },
+  name: 'ecommerce.sid',
+  rolling: true, // Reset cookie maxAge on every request
+  unset: 'destroy' // Destroy the session when unset
+};
+
+// Trust first proxy
+app.set('trust proxy', 1);
+
+// Enable CORS with credentials
+const corsOptions = {
+  origin: process.env.FRONTEND_URL || 'http://localhost:4200',
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  exposedHeaders: ['set-cookie']
+};
+
+// Apply CORS before session middleware
+app.use(cors(corsOptions));
+
+// Debug middleware to log session info
+app.use((req, res, next) => {
+  console.log('--- New Request ---');
+  console.log('Cookies:', req.headers.cookie);
+  next();
+});
+
+// Apply session middleware
+app.use(session(sessionConfig));
+
+// Debug middleware after session is initialized
+app.use((req, res, next) => {
+  console.log('Session ID:', req.sessionID);
+  console.log('Session data:', req.session);
+  next();
+});
+
+// Cache control for API routes
 app.use('/api', (req, res, next) => {
   res.set('Cache-Control', 'no-store');
   next();
 });
 
+// CORS configuration
 app.use(cors({
-  origin: 'http://localhost:4200', // Angular dev server
+  origin: 'http://localhost:4200',
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   exposedHeaders: ['Content-Type', 'Authorization']
 }));
 
+// Parse JSON and URL-encoded bodies
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-app.use('/api', routes);
-
-// Serve Swagger UI at /docs
-app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
-
-app.get('/health', async (req, res) => {
-  try {
-    await sequelize.authenticate();
-    res.status(200).json({ status: 'ok', db: 'connected' });
-  } catch (error) {
-    res.status(500).json({ status: 'error', db: 'disconnected', error: error.message });
+// Test route to verify sessions
+app.get('/api/session-test', (req, res) => {
+  // Initialize view count if it doesn't exist
+  if (!req.session.views) {
+    req.session.views = 0;
   }
+  
+  // Increment view count
+  req.session.views++;
+  
+  // Log session info
+  console.log('Session in test endpoint:', {
+    sessionId: req.sessionID,
+    views: req.session.views,
+    cookie: req.session.cookie
+  });
+  
+  // Send response
+  res.json({
+    sessionId: req.sessionID,
+    views: req.session.views,
+    cookie: req.session.cookie
+  });
 });
 
+// API routes
+app.use('/api', routes);
+
+// Swagger documentation
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+
+// Error handling middleware
 app.use(errorHandler);
 
-module.exports = app; 
+module.exports = app;

@@ -1,5 +1,5 @@
 function productDetailsDTO(product) {
-  const stock = product.Inventory?.quantity ?? 0;
+  const stock = product.inventory?.quantity ?? 0;
   let status = 'Active';
   if (stock === 0) {
     status = 'Out of Stock';
@@ -13,17 +13,18 @@ function productDetailsDTO(product) {
     product_type: product.product_type,
     author: product.author || null,
     images: product.images || [],
-    description: product.metadata?.description || null, // assuming description is in metadata
-    price: product.price,
+    description: product.description || null,
+    selling_price: product.selling_price,
+    cost_price: product.cost_price,
     stock,
     status,
     metadata: product.metadata || {},
     // Add genres and audiences
-    genres: (product.Genres || []).map(g => ({
+    genres: (product.genres || []).map(g => ({
       id: g.id,
       name: g.name
     })),
-    audiences: (product.Audiences || []).map(a => ({
+    audiences: (product.audiences || []).map(a => ({
       id: a.id,
       name: a.name
     }))

@@ -1,24 +1,26 @@
-const { DataTypes } = require('sequelize');
-const sequelize = require('../../config/database');
-const Product = require('./Product');
+module.exports = (sequelize, DataTypes) => {
+  const NewBook = sequelize.define('NewBook', {
+    product_id: {
+      type: DataTypes.INTEGER,
+      primaryKey: true,
+      references: {
+        model: 'products',  // Use table name here to avoid circular dependency
+        key: 'id',
+      },
+      onDelete: 'CASCADE',
+    }
+  }, {
+    tableName: 'new_books',
+    timestamps: false,
+  });
 
-const NewBook = sequelize.define('NewBook', {
-  product_id: {
-    type: DataTypes.INTEGER,
-    primaryKey: true,
-    references: {
-      model: Product,
-      key: 'id',
-    },
-    onDelete: 'CASCADE',
-  }
-}, {
-  tableName: 'new_books',
-  timestamps: false,
-});
+  NewBook.associate = (models) => {
+    NewBook.belongsTo(models.Product, { 
+      foreignKey: 'product_id',
+      as: 'product',
+      onDelete: 'CASCADE'
+    });
+  };
 
-// Association
-NewBook.belongsTo(Product, { foreignKey: 'product_id', onDelete: 'CASCADE' });
-Product.hasOne(NewBook, { foreignKey: 'product_id', onDelete: 'CASCADE' });
-
-module.exports = NewBook; 
+  return NewBook;
+};
