@@ -289,7 +289,7 @@ async function mergeCarts(sessionId, userId, options = {}) {
             transaction: t
           });
 
-          // If item doesn't exist, create it with the guest item's quantity (ensuring it's at least 1)
+          // If item doesn't exist in user's cart, create it with the guest item's quantity
           if (!userItem) {
             console.log(`[CART SERVICE] Creating new cart item with quantity: ${Math.max(1, guestItem.quantity || 1)}`);
             userItem = await CartItem.create({
@@ -298,24 +298,29 @@ async function mergeCarts(sessionId, userId, options = {}) {
               quantity: Math.max(1, guestItem.quantity || 1), // Ensure minimum quantity of 1
               price: guestItem.price
             }, { transaction: t });
-          }
-
-          console.log(`[CART SERVICE] Found/created user cart item. Old Qty: ${userItem.quantity}, Adding: ${guestItem.quantity}`);
-
-          // Ensure quantity is at least 1
-          const newQuantity = Math.max(1, (userItem.quantity || 0) + (guestItem.quantity || 1));
-          
-          console.log(`[CART SERVICE] Updating item quantity - Existing: ${userItem.quantity || 0}, Adding: ${guestItem.quantity || 1}, New: ${newQuantity}`);
-          
-          await userItem.update(
-            { quantity: newQuantity },
-            { 
-              transaction: t,
-              validate: false // Skip validation since we're ensuring the quantity is valid
+            console.log(`[CART SERVICE] Created new cart item with ID: ${userItem.id}`);
+          } else {
+            // Item exists in user's cart, only update if guest has a higher quantity
+            const guestQuantity = Math.max(1, guestItem.quantity || 1);
+            const currentQuantity = userItem.quantity || 0;
+            
+            if (guestQuantity > currentQuantity) {
+              console.log(`[CART SERVICE] Updating quantity from ${currentQuantity} to ${guestQuantity} (guest had more)`);
+              await userItem.update(
+                { quantity: guestQuantity },
+                { 
+                  transaction: t,
+                  validate: false
+                }
+              );
+            } else {
+              console.log(`[CART SERVICE] Keeping existing quantity ${currentQuantity} (greater than or equal to guest's ${guestQuantity})`);
             }
-          );
+          }
           
-          console.log(`[CART SERVICE] Successfully updated item quantity to ${newQuantity}`);
+          // Reload the item to get the latest quantity
+          const updatedItem = await CartItem.findByPk(userItem.id, { transaction: t });
+          console.log(`[CART SERVICE] Final quantity for product ${guestItem.product_id}: ${updatedItem.quantity}`);
         }
         
         // Delete guest cart
