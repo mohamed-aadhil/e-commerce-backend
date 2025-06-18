@@ -12,6 +12,23 @@ export const cartValidation = {
       .isInt({ min: 1 })
       .withMessage('Quantity must be at least 1'),
   ],
+  
+  // Validation for checkout
+  checkout: [
+    body('addressId')
+      .isInt({ min: 1 })
+      .withMessage('Valid address ID is required'),
+    body('shippingMethod')
+      .optional()
+      .isString()
+      .isIn(['standard', 'express', 'overnight'])
+      .withMessage('Invalid shipping method'),
+    body('paymentMethod')
+      .optional()
+      .isString()
+      .isIn(['credit_card', 'paypal', 'cod'])
+      .withMessage('Invalid payment method'),
+  ],
 
   // Validation for updating cart item quantity
   updateItem: [

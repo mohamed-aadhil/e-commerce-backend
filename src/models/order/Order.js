@@ -14,54 +14,16 @@ module.exports = (sequelize, DataTypes) => {
       },
       onDelete: 'SET NULL',
     },
-    order_number: {
-      type: DataTypes.STRING,
-      allowNull: false,
-      unique: true,
-    },
     status: {
       type: DataTypes.ENUM(
         'pending', 
-        'processing', 
+        'paid', 
         'shipped', 
         'delivered', 
-        'cancelled', 
-        'refunded',
-        'failed'
+        'cancelled'
       ),
       allowNull: false,
       defaultValue: 'pending',
-    },
-    subtotal: {
-      type: DataTypes.DECIMAL(10, 2),
-      allowNull: false,
-      validate: {
-        min: 0,
-      },
-    },
-    tax_amount: {
-      type: DataTypes.DECIMAL(10, 2),
-      allowNull: false,
-      defaultValue: 0,
-      validate: {
-        min: 0,
-      },
-    },
-    shipping_amount: {
-      type: DataTypes.DECIMAL(10, 2),
-      allowNull: false,
-      defaultValue: 0,
-      validate: {
-        min: 0,
-      },
-    },
-    discount_amount: {
-      type: DataTypes.DECIMAL(10, 2),
-      allowNull: false,
-      defaultValue: 0,
-      validate: {
-        min: 0,
-      },
     },
     total: {
       type: DataTypes.DECIMAL(10, 2),
@@ -71,7 +33,7 @@ module.exports = (sequelize, DataTypes) => {
       },
     },
     payment_status: {
-      type: DataTypes.ENUM('pending', 'paid', 'failed', 'refunded', 'partially_refunded'),
+      type: DataTypes.ENUM('pending', 'completed', 'failed'),
       allowNull: false,
       defaultValue: 'pending',
     },
@@ -84,27 +46,37 @@ module.exports = (sequelize, DataTypes) => {
       },
       onDelete: 'SET NULL',
     },
-    billing_address_id: {
+    shipping_method: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      comment: 'e.g., standard, express'
+    },
+    shipping_cost: {
+      type: DataTypes.DECIMAL(10, 2),
+      allowNull: false,
+      defaultValue: 0,
+      validate: {
+        min: 0,
+      },
+    },
+    payment_id: {
       type: DataTypes.INTEGER,
       allowNull: true,
       references: {
-        model: 'addresses',
+        model: 'payments',
         key: 'id',
       },
       onDelete: 'SET NULL',
     },
-    notes: {
-      type: DataTypes.TEXT,
-      allowNull: true,
-    },
     created_at: {
       type: DataTypes.DATE,
+      allowNull: false,
       defaultValue: DataTypes.NOW,
     },
     updated_at: {
       type: DataTypes.DATE,
+      allowNull: false,
       defaultValue: DataTypes.NOW,
-      onUpdate: DataTypes.NOW,
     },
   }, {
     tableName: 'orders',
@@ -113,7 +85,7 @@ module.exports = (sequelize, DataTypes) => {
     indexes: [
       { fields: ['user_id'] },
       { fields: ['status'] },
-      { fields: ['order_number'], unique: true },
+      { fields: ['payment_status'] },
     ],
   });
 
@@ -139,6 +111,13 @@ module.exports = (sequelize, DataTypes) => {
       onDelete: 'SET NULL'
     });
     
+    // Order belongs to Payment (for payment_id foreign key)
+    Order.belongsTo(models.Payment, {
+      foreignKey: 'payment_id',
+      as: 'orderPayment',
+      onDelete: 'SET NULL'
+    });
+    
     // Order has one Shipping
     Order.hasOne(models.Shipping, {
       foreignKey: 'order_id',
@@ -146,17 +125,17 @@ module.exports = (sequelize, DataTypes) => {
       onDelete: 'SET NULL'
     });
     
+    // Order belongs to Payment (for payment_id foreign key)
+    Order.belongsTo(models.Payment, {
+      foreignKey: 'payment_id',
+      as: 'orderPayment',
+      onDelete: 'SET NULL'
+    });
+    
     // Order belongs to Address (shipping address)
     Order.belongsTo(models.Address, {
       foreignKey: 'shipping_address_id',
       as: 'shippingAddress',
-      onDelete: 'SET NULL'
-    });
-    
-    // Order belongs to Address (billing address)
-    Order.belongsTo(models.Address, {
-      foreignKey: 'billing_address_id',
-      as: 'billingAddress',
       onDelete: 'SET NULL'
     });
   };

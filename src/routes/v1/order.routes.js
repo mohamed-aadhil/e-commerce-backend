@@ -14,6 +14,18 @@ router.post(
   '/',
   [
     body('addressId').isInt().withMessage('Valid address ID is required'),
+    body('shippingMethod')
+      .optional()
+      .isString()
+      .trim()
+      .isIn(['standard', 'express', 'overnight'])
+      .withMessage('Invalid shipping method. Must be one of: standard, express, overnight'),
+    body('paymentMethod')
+      .optional()
+      .isString()
+      .trim()
+      .isIn(['credit_card', 'debit_card', 'paypal', 'wallet'])
+      .withMessage('Invalid payment method. Must be one of: credit_card, debit_card, paypal, wallet'),
     body('items')
       .optional()
       .isArray()

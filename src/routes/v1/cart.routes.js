@@ -63,4 +63,20 @@ router.post('/merge', (req, res, next) => {
   next();
 }, cartController.mergeCarts);
 
+// Checkout cart and create order
+router.post(
+  '/checkout',
+  (req, res, next) => {
+    if (!req.user) {
+      const error = new Error('Authentication required for checkout');
+      error.status = 401;
+      return next(error);
+    }
+    next();
+  },
+  cartValidation.checkout,
+  validateRequest,
+  cartController.checkout
+);
+
 module.exports = router;

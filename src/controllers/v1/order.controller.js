@@ -15,13 +15,71 @@ const createOrder = async (req, res, next) => {
     }
 
     const userId = req.user.id;
-    const { addressId, items } = req.body;
+    const { 
+      addressId, 
+      items, 
+      shippingMethod = 'standard',
+      paymentMethod = 'credit_card'
+    } = req.body;
     
-    const order = await orderService.createOrder(userId, { addressId, items });
+    // Validate shipping method
+    const validShippingMethods = ['standard', 'express', 'overnight'];
+    if (!validShippingMethods.includes(shippingMethod)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid shipping method',
+        validMethods: validShippingMethods
+      });
+    }
+    
+    // Validate payment method
+    const validPaymentMethods = ['credit_card', 'debit_card', 'paypal', 'wallet'];
+    if (!validPaymentMethods.includes(paymentMethod)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid payment method',
+        validMethods: validPaymentMethods
+      });
+    }
+    
+    // Create the order with shipping and initial payment record
+    const order = await orderService.createOrder(userId, { 
+      addressId, 
+      items, 
+      shippingMethod,
+      paymentMethod
+    });
+    
+    // In a real application, you would:
+    // 1. Redirect to payment gateway if needed
+    // 2. Or process payment asynchronously
+    // 3. Or return payment instructions
+    
+    const response = {
+      ...order,
+      payment: {
+        status: 'pending',
+        next_steps: [
+          {
+            action: 'process_payment',
+            method: 'POST',
+            url: `/api/v1/payments/${order.payment_id}/process`,
+            description: 'Process the payment for this order'
+          },
+          {
+            action: 'check_status',
+            method: 'GET',
+            url: `/api/v1/orders/${order.id}`,
+            description: 'Check the status of this order'
+          }
+        ]
+      }
+    };
     
     res.status(201).json({
       success: true,
-      data: order
+      data: response,
+      message: 'Order created successfully. Please proceed with payment.'
     });
   } catch (error) {
     next(error);

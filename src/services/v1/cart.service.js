@@ -1,6 +1,7 @@
 const { Op } = require('sequelize');
 const db = require('../../models');
 const { Cart, CartItem, Product, Inventory } = db;
+const orderService = require('./order.service');
 
 // Common include options for cart queries
 const cartIncludeOptions = [
@@ -443,11 +444,72 @@ async function clearCart(sessionId, userId = null) {
   });
 }
 
+/**
+ * Checkout cart and create an order
+ * @param {string} sessionId - Session ID
+ * @param {number} userId - User ID (must be authenticated)
+ * @param {Object} checkoutData - Checkout data
+ * @param {number} checkoutData.addressId - Shipping address ID
+ * @param {string} [checkoutData.shippingMethod] - Shipping method (default: 'standard')
+ * @param {string} [checkoutData.paymentMethod] - Payment method (default: 'credit_card')
+ * @returns {Promise<Object>} Created order
+ */
+async function checkout(sessionId, userId, { addressId, shippingMethod = 'standard', paymentMethod = 'credit_card' }) {
+  if (!userId) {
+    const error = new Error('User must be authenticated to checkout');
+    error.status = 401;
+    throw error;
+  }
+
+  return db.sequelize.transaction(async (transaction) => {
+    try {
+      // 1. Get the user's cart with items
+      const cart = await getOrCreateCart(sessionId, userId, { transaction });
+      
+      if (!cart.items || cart.items.length === 0) {
+        const error = new Error('Cannot checkout with an empty cart');
+        error.status = 400;
+        throw error;
+      }
+
+      // 2. Prepare cart items for order creation
+      const orderItems = cart.items.map(item => ({
+        productId: item.product_id,
+        quantity: item.quantity,
+        price: item.price || item.product?.selling_price || 0
+      }));
+
+      // 3. Create order from cart
+      const order = await orderService.createOrder(userId, {
+        addressId,
+        items: orderItems,
+        shippingMethod,
+        paymentMethod
+      }, { transaction });
+
+      // 4. Clear the cart after successful order creation
+      await CartItem.destroy({
+        where: { cart_id: cart.id },
+        transaction
+      });
+
+      // 5. Update cart's updated_at timestamp
+      await cart.update({ updated_at: new Date() }, { transaction });
+
+      return order;
+    } catch (error) {
+      console.error('Checkout failed:', error);
+      throw error;
+    }
+  });
+}
+
 module.exports = {
   getOrCreateCart,
   addItem,
   updateItem,
   removeItem,
   clearCart,
-  mergeCarts
+  mergeCarts,
+  checkout,
 };

@@ -1,5 +1,7 @@
 const db = require('../../models');
 const { Op } = require('sequelize');
+const shippingService = require('./shipping.service');
+const paymentService = require('./payment.service');
 
 /**
  * Create order items and calculate total
@@ -68,15 +70,26 @@ const prepareOrderItems = async (items, transaction) => {
 /**
  * Create a new order (supports both cart and direct purchase)
  */
-const createOrder = async (userId, { addressId, items: directItems }) => {
+const createOrder = async (userId, { 
+  addressId, 
+  items: directItems,
+  shippingMethod = 'standard',
+  paymentMethod = 'credit_card'
+}) => {
   const transaction = await db.sequelize.transaction();
   
   try {
-    // 1. Verify address belongs to user
-    const address = await db.Address.findOne({
-      where: { id: addressId, user_id: userId },
-      transaction
-    });
+    // 1. Verify address belongs to user and get user details
+    const [address, user] = await Promise.all([
+      db.Address.findOne({
+        where: { id: addressId, user_id: userId },
+        transaction
+      }),
+      db.User.findByPk(userId, {
+        attributes: ['id', 'email', 'name'],
+        transaction
+      })
+    ]);
 
     if (!address) {
       const error = new Error('Address not found');
@@ -129,11 +142,22 @@ const createOrder = async (userId, { addressId, items: directItems }) => {
       });
     }
 
-    // Create order
+    // Calculate shipping cost
+    const shippingCost = await shippingService.calculateShippingCost({
+      shippingMethod,
+      itemCount: orderItems.length,
+      totalWeight: 0, // In a real app, calculate total weight from products
+    });
+
+    // Create order with shipping details
     const order = await db.Order.create({
       user_id: userId,
       status: 'pending',
-      total: orderTotal,
+      payment_status: 'pending',
+      shipping_address_id: addressId,
+      shipping_method: shippingMethod,
+      shipping_cost: shippingCost,
+      total: orderTotal + shippingCost, // Include shipping in total
       OrderItems: orderItems
     }, {
       include: [db.OrderItem],
@@ -144,11 +168,27 @@ const createOrder = async (userId, { addressId, items: directItems }) => {
     await Promise.all(inventoryUpdates);
 
     // Create shipping record
-    await db.Shipping.create({
-      order_id: order.id,
-      address_id: addressId,
-      shipping_status: 'pending'
-    }, { transaction });
+    await shippingService.createShippingRecord({
+      orderId: order.id,
+      addressId,
+      shippingMethod,
+      shippingCost
+    }, transaction);
+
+    // Create initial payment record
+    const payment = await paymentService.createPayment(
+      order.id,
+      order.total,
+      paymentMethod,
+      transaction
+    );
+    
+    // Add payment details to order
+    order.payment = payment;
+
+    // Associate payment with order
+    order.payment_id = payment.id;
+    await order.save({ transaction });
 
     await transaction.commit();
 
@@ -179,7 +219,21 @@ const getOrderById = async (orderId, userId) => {
       },
       {
         model: db.Shipping,
-        include: [db.Address]
+        as: 'shipping',
+        include: [{
+          model: db.Address,
+          as: 'address'
+        }]
+      },
+      {
+        model: db.Address,
+        as: 'shippingAddress',
+        attributes: { exclude: ['created_at', 'updated_at'] }
+      },
+      {
+        model: db.Payment,
+        as: 'orderPayment',
+        attributes: { exclude: ['created_at', 'updated_at'] }
       }
     ]
   });

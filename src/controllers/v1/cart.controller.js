@@ -1,7 +1,8 @@
 const cartService = require('../../services/v1/cart.service');
-const { cartResponseDTO } = require('../../dtos/v1/cart.dto');
+const { cartResponseDTO, cartValidation } = require('../../dtos/v1/cart.dto');
 const db = require('../../models');
 const { Product } = db;
+const { validationResult } = require('express-validator');
 
 /**
  * Get the current user's cart
@@ -154,11 +155,68 @@ const mergeCarts = async (req, res, next) => {
   }
 };
 
+/**
+ * Checkout the cart and create an order
+ */
+const checkout = async (req, res, next) => {
+  const t = await db.sequelize.transaction();
+  
+  try {
+    // Check if user is authenticated
+    if (!req.user) {
+      const error = new Error('Authentication required for checkout');
+      error.status = 401;
+      throw error;
+    }
+
+    // Validate request body
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      await t.rollback();
+      return res.status(400).json({
+        success: false,
+        errors: errors.array()
+      });
+    }
+
+    const { addressId, shippingMethod, paymentMethod } = req.body;
+
+    // Process checkout
+    const order = await cartService.checkout(
+      req.sessionID,
+      req.user.id,
+      {
+        addressId,
+        shippingMethod: shippingMethod || 'standard',
+        paymentMethod: paymentMethod || 'credit_card'
+      },
+      { transaction: t }
+    );
+
+    await t.commit();
+    
+    res.status(201).json({
+      success: true,
+      message: 'Order created successfully',
+      data: {
+        orderId: order.id,
+        status: order.status,
+        total: order.total,
+        items: order.items
+      }
+    });
+  } catch (error) {
+    await t.rollback();
+    next(error);
+  }
+};
+
 module.exports = {
   getCart,
   addItem,
   updateItem,
   removeItem,
   clearCart,
-  mergeCarts
+  mergeCarts,
+  checkout
 };

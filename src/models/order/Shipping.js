@@ -25,37 +25,20 @@ module.exports = (sequelize, DataTypes) => {
     },
     shipping_method: {
       type: DataTypes.STRING,
-      allowNull: false,
-      comment: 'e.g., standard, express, next-day',
-    },
-    shipping_carrier: {
-      type: DataTypes.STRING,
       allowNull: true,
-      comment: 'e.g., UPS, FedEx, USPS',
+      comment: 'e.g., standard, express'
     },
-    tracking_number: {
-      type: DataTypes.STRING,
-      allowNull: true,
-    },
-    tracking_url: {
-      type: DataTypes.TEXT,
-      allowNull: true,
-    },
-    status: {
+    shipping_status: {
       type: DataTypes.ENUM(
         'pending',
-        'processing',
         'shipped',
-        'in_transit',
-        'out_for_delivery',
         'delivered',
-        'returned',
         'cancelled'
       ),
       allowNull: false,
       defaultValue: 'pending',
     },
-    cost: {
+    shipping_cost: {
       type: DataTypes.DECIMAL(10, 2),
       allowNull: false,
       defaultValue: 0,
@@ -63,22 +46,8 @@ module.exports = (sequelize, DataTypes) => {
         min: 0,
       },
     },
-    weight: {
-      type: DataTypes.DECIMAL(10, 2),
-      allowNull: true,
-      comment: 'Weight in grams',
-    },
-    dimensions: {
-      type: DataTypes.JSONB,
-      allowNull: true,
-      comment: 'Package dimensions {length, width, height, unit}',
-    },
-    notes: {
-      type: DataTypes.TEXT,
-      allowNull: true,
-    },
-    metadata: {
-      type: DataTypes.JSONB,
+    tracking_number: {
+      type: DataTypes.STRING,
       allowNull: true,
     },
     shipped_at: {
@@ -89,27 +58,24 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.DATE,
       allowNull: true,
     },
-    estimated_delivery: {
-      type: DataTypes.DATE,
-      allowNull: true,
-    },
     created_at: {
       type: DataTypes.DATE,
+      allowNull: false,
       defaultValue: DataTypes.NOW,
     },
     updated_at: {
       type: DataTypes.DATE,
+      allowNull: false,
       defaultValue: DataTypes.NOW,
-      onUpdate: DataTypes.NOW,
     },
   }, {
     tableName: 'shipping',
     timestamps: false,
     underscored: true,
     indexes: [
-      { fields: ['order_id'], unique: true },
+      { fields: ['order_id'] },
       { fields: ['tracking_number'] },
-      { fields: ['status'] },
+      { fields: ['shipping_status'] },
     ],
   });
 
