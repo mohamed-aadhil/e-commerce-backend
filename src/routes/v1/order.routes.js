@@ -1,8 +1,8 @@
 const express = require('express');
 const { body, param, query, check } = require('express-validator');
 const orderController = require('../../controllers/v1/order.controller');
-const { authenticate } = require('../../middlewares/auth.middleware');
-const validate = require('../../middlewares/validate.middleware');
+const { authenticate } = require('../../middlewares/auth');
+const { validateRequest } = require('../../middlewares/validation.middleware');
 
 const router = express.Router();
 
@@ -32,7 +32,7 @@ router.post(
       .if(body('items').exists())
       .isInt({ min: 1 })
       .withMessage('Quantity must be at least 1'),
-    validate
+    validateRequest
   ],
   orderController.createOrder
 );
@@ -43,7 +43,7 @@ router.get(
   [
     query('page').optional().isInt({ min: 1 }),
     query('limit').optional().isInt({ min: 1, max: 100 }),
-    validate
+    validateRequest
   ],
   orderController.getUserOrders
 );
@@ -53,7 +53,7 @@ router.get(
   '/:id',
   [
     param('id').isInt().withMessage('Valid order ID is required'),
-    validate
+    validateRequest
   ],
   orderController.getOrder
 );
@@ -63,7 +63,7 @@ router.post(
   '/:id/cancel',
   [
     param('id').isInt().withMessage('Valid order ID is required'),
-    validate
+    validateRequest
   ],
   orderController.cancelOrder
 );

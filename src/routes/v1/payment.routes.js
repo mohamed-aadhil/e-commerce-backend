@@ -1,8 +1,8 @@
 const express = require('express');
 const { body, param } = require('express-validator');
 const paymentController = require('../../controllers/v1/payment.controller');
-const { authenticate } = require('../../middlewares/auth.middleware');
-const validate = require('../../middlewares/validate.middleware');
+const { authenticate } = require('../../middlewares/auth');
+const { validateRequest } = require('../../middlewares/validation.middleware');
 
 const router = express.Router();
 
@@ -19,9 +19,9 @@ router.post(
   [
     body('orderId', 'Order ID is required').isInt(),
     body('amount', 'Amount must be a positive number').isFloat({ min: 0.01 }),
-    body('paymentMethod', 'Invalid payment method').optional().isString(),
-    validate
+    body('paymentMethod', 'Invalid payment method').optional().isString()
   ],
+  validateRequest,
   paymentController.createPayment
 );
 
@@ -33,9 +33,9 @@ router.post(
 router.get(
   '/:id',
   [
-    param('id', 'Valid payment ID is required').isInt(),
-    validate
+    param('id', 'Valid payment ID is required').isInt()
   ],
+  validateRequest,
   paymentController.getPayment
 );
 
@@ -48,9 +48,9 @@ router.post(
   '/:id/confirm',
   [
     param('id', 'Valid payment ID is required').isInt(),
-    body('success', 'Success must be a boolean').optional().isBoolean(),
-    validate
+    body('success', 'Success must be a boolean').optional().isBoolean()
   ],
+  validateRequest,
   paymentController.confirmPayment
 );
 
@@ -63,9 +63,9 @@ router.post(
   '/:id/refund',
   [
     param('id', 'Valid payment ID is required').isInt(),
-    body('reason', 'Reason must be a string').optional().isString(),
-    validate
+    body('reason', 'Reason must be a string').optional().isString()
   ],
+  validateRequest,
   paymentController.refundPayment
 );
 
