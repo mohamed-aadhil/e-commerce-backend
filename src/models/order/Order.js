@@ -68,6 +68,16 @@ module.exports = (sequelize, DataTypes) => {
       },
       onDelete: 'SET NULL',
     },
+    cart_id: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      references: {
+        model: 'carts',
+        key: 'id',
+      },
+      onDelete: 'SET NULL',
+      comment: 'Reference to the cart that was used to create this order'
+    },
     created_at: {
       type: DataTypes.DATE,
       allowNull: false,
@@ -86,6 +96,7 @@ module.exports = (sequelize, DataTypes) => {
       { fields: ['user_id'] },
       { fields: ['status'] },
       { fields: ['payment_status'] },
+      { fields: ['cart_id'] },
     ],
   });
 
@@ -125,17 +136,17 @@ module.exports = (sequelize, DataTypes) => {
       onDelete: 'SET NULL'
     });
     
-    // Order belongs to Payment (for payment_id foreign key)
-    Order.belongsTo(models.Payment, {
-      foreignKey: 'payment_id',
-      as: 'orderPayment',
-      onDelete: 'SET NULL'
-    });
-    
     // Order belongs to Address (shipping address)
     Order.belongsTo(models.Address, {
       foreignKey: 'shipping_address_id',
       as: 'shippingAddress',
+      onDelete: 'SET NULL'
+    });
+    
+    // Order belongs to Cart
+    Order.belongsTo(models.Cart, {
+      foreignKey: 'cart_id',
+      as: 'cart',
       onDelete: 'SET NULL'
     });
   };

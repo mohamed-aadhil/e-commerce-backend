@@ -1,5 +1,6 @@
 const db = require('../../models');
 const { Op } = require('sequelize');
+const cartService = require('./cart.service');
 
 /**
  * Create a payment record
@@ -52,6 +53,11 @@ const processPayment = async (paymentId, paymentDetails = {}, options = {}) => {
             {
               model: db.Shipping,
               as: 'shipping'
+            },
+            {
+              model: db.Cart,
+              as: 'cart',
+              attributes: ['id']
             }
           ]
         }
@@ -152,10 +158,20 @@ const processPayment = async (paymentId, paymentDetails = {}, options = {}) => {
 
         await updateTxn.commit();
 
-        // In a real application, you might want to:
+        // 7. Clear the cart after successful payment if it was a cart checkout
+        if (payment.order?.cart_id) {
+          try {
+            await cartService.clearCartById(payment.order.cart_id, { transaction: updateTxn });
+            console.log(`[PAYMENT] Cart ${payment.order.cart_id} cleared after successful payment for order ${payment.order_id}`);
+          } catch (cartError) {
+            // Log the error but don't fail the payment
+            console.error(`[PAYMENT] Error clearing cart ${payment.order.cart_id}:`, cartError);
+          }
+        }
+
+        // In a real application, you might also want to:
         // 1. Send order confirmation email
-        // 2. Update inventory (if not done during order creation)
-        // 3. Trigger any post-payment workflows
+        // 2. Trigger any post-payment workflows
 
         return {
           success: true,

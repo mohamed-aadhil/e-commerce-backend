@@ -61,10 +61,19 @@ CREATE TABLE ebooks (
 CREATE TABLE orders (
     id SERIAL PRIMARY KEY,
     user_id INT REFERENCES users(id) ON DELETE SET NULL,
-    status TEXT NOT NULL CHECK (status IN ('pending', 'paid', 'shipped', 'delivered', 'cancelled')),
+    status TEXT NOT NULL CHECK (status IN ('pending', 'paid', 'shipped', 'delivered', 'cancelled', 'pending_payment', 'processing', 'processing_payment', 'payment_failed')),
     total NUMERIC(10,2) NOT NULL,
+    payment_status TEXT NOT NULL CHECK (payment_status IN ('pending', 'completed', 'failed')),
+    shipping_address_id INT REFERENCES addresses(id) ON DELETE SET NULL,
+    shipping_method TEXT,
+    shipping_cost NUMERIC(10,2) NOT NULL DEFAULT 0,
+    payment_id INT REFERENCES payments(id) ON DELETE SET NULL,
+    cart_id INT REFERENCES carts(id) ON DELETE SET NULL,
     created_at TIMESTAMP DEFAULT NOW(),
-    updated_at TIMESTAMP DEFAULT NOW()
+    updated_at TIMESTAMP DEFAULT NOW(),
+    CONSTRAINT fk_shipping_address FOREIGN KEY (shipping_address_id) REFERENCES addresses(id) ON DELETE SET NULL,
+    CONSTRAINT fk_payment FOREIGN KEY (payment_id) REFERENCES payments(id) ON DELETE SET NULL,
+    CONSTRAINT fk_cart FOREIGN KEY (cart_id) REFERENCES carts(id) ON DELETE SET NULL
 );
 
 -- 8. Order Items Table
@@ -116,13 +125,16 @@ CREATE TABLE shipping (
     order_id INT REFERENCES orders(id) ON DELETE CASCADE,
     address_id INT REFERENCES addresses(id) ON DELETE SET NULL,
     shipping_method TEXT,                 -- e.g., 'standard', 'express'
-    shipping_status TEXT NOT NULL,        -- e.g., 'pending', 'shipped', 'delivered'
+    shipping_status TEXT NOT NULL CHECK (shipping_status IN ('pending', 'preparing', 'shipped', 'in_transit', 'delivered', 'failed')),
+    shipping_cost NUMERIC(10,2) NOT NULL DEFAULT 0,
     tracking_number TEXT,
     shipped_at TIMESTAMP,
-    delivered_at TIMESTAMP
+    delivered_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
 );
 
--- 13. Payments Table (for future use)
+-- 13. Payments Table
 CREATE TABLE payments (
     id SERIAL PRIMARY KEY,
     order_id INT REFERENCES orders(id) ON DELETE CASCADE,
@@ -130,7 +142,10 @@ CREATE TABLE payments (
     payment_status TEXT NOT NULL,         -- e.g., 'pending', 'completed', 'failed'
     transaction_id TEXT,                  -- from payment gateway
     amount NUMERIC(10,2) NOT NULL,
-    paid_at TIMESTAMP
+    paid_at TIMESTAMP,
+    refunded_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
 );
 
 -- Genres

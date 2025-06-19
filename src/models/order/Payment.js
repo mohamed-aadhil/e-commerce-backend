@@ -13,28 +13,23 @@ module.exports = (sequelize, DataTypes) => {
         key: 'id',
       },
       onDelete: 'CASCADE',
+      comment: 'Reference to the order this payment is for',
     },
     payment_method: {
-      type: DataTypes.ENUM(
-        'credit_card',
-        'debit_card',
-        'paypal',
-        'stripe',
-        'bank_transfer',
-        'cash_on_delivery',
-        'other'
-      ),
-      allowNull: false,
-    },
-    payment_gateway: {
       type: DataTypes.STRING,
-      allowNull: true,
-      comment: 'e.g., Stripe, PayPal, Authorize.net',
+      allowNull: false,
+      comment: 'e.g., credit_card, paypal',
+    },
+    payment_status: {
+      type: DataTypes.ENUM('pending', 'completed', 'failed'),
+      allowNull: false,
+      defaultValue: 'pending',
+      comment: 'Current status of the payment',
     },
     transaction_id: {
       type: DataTypes.STRING,
       allowNull: true,
-      comment: 'Gateway transaction ID',
+      comment: 'Transaction ID from payment gateway',
     },
     amount: {
       type: DataTypes.DECIMAL(10, 2),
@@ -42,107 +37,42 @@ module.exports = (sequelize, DataTypes) => {
       validate: {
         min: 0,
       },
-    },
-    currency: {
-      type: DataTypes.STRING(3),
-      allowNull: false,
-      defaultValue: 'USD',
-    },
-    status: {
-      type: DataTypes.ENUM(
-        'pending',
-        'authorized',
-        'captured',
-        'refunded',
-        'partially_refunded',
-        'voided',
-        'failed',
-        'disputed',
-        'succeeded'
-      ),
-      allowNull: false,
-      defaultValue: 'pending',
-    },
-    card_last4: {
-      type: DataTypes.STRING(4),
-      allowNull: true,
-    },
-    card_brand: {
-      type: DataTypes.STRING,
-      allowNull: true,
-      comment: 'e.g., Visa, MasterCard, Amex',
-    },
-    card_exp_month: {
-      type: DataTypes.INTEGER,
-      allowNull: true,
-      validate: {
-        min: 1,
-        max: 12,
-      },
-    },
-    card_exp_year: {
-      type: DataTypes.INTEGER,
-      allowNull: true,
-    },
-    billing_address: {
-      type: DataTypes.JSONB,
-      allowNull: true,
-      comment: 'Snapshot of billing address at time of payment',
-    },
-    metadata: {
-      type: DataTypes.JSONB,
-      allowNull: true,
-      comment: 'Additional payment gateway response data',
-    },
-    failure_code: {
-      type: DataTypes.STRING,
-      allowNull: true,
-      comment: 'Error code if payment failed',
-    },
-    failure_message: {
-      type: DataTypes.TEXT,
-      allowNull: true,
-      comment: 'Error message if payment failed',
-    },
-    refunded_amount: {
-      type: DataTypes.DECIMAL(10, 2),
-      allowNull: false,
-      defaultValue: 0,
-      validate: {
-        min: 0,
-      },
+      comment: 'Payment amount',
     },
     paid_at: {
       type: DataTypes.DATE,
       allowNull: true,
+      comment: 'When the payment was successfully processed',
     },
     refunded_at: {
       type: DataTypes.DATE,
       allowNull: true,
+      comment: 'When the payment was refunded, if applicable',
     },
     created_at: {
       type: DataTypes.DATE,
+      allowNull: false,
       defaultValue: DataTypes.NOW,
     },
     updated_at: {
       type: DataTypes.DATE,
+      allowNull: false,
       defaultValue: DataTypes.NOW,
       onUpdate: DataTypes.NOW,
     },
   }, {
     tableName: 'payments',
-    timestamps: false,
+    timestamps: false, // We're using created_at/updated_at manually
     underscored: true,
     indexes: [
       { fields: ['order_id'] },
-      { fields: ['transaction_id'], unique: true },
-      { fields: ['status'] },
-      { fields: ['payment_method'] },
+      { fields: ['payment_status'] },
+      { fields: ['transaction_id'] },
     ],
   });
 
   Payment.associate = (models) => {
-    // Payment belongs to Order
+    // Each payment belongs to one order
     Payment.belongsTo(models.Order, {
       foreignKey: 'order_id',
       as: 'order',

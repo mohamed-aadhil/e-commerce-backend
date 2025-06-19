@@ -74,7 +74,8 @@ const createOrder = async (userId, {
   addressId, 
   items: directItems,
   shippingMethod = 'standard',
-  paymentMethod = 'credit_card'
+  paymentMethod = 'credit_card',
+  cartId = null
 }) => {
   const transaction = await db.sequelize.transaction();
   
@@ -135,11 +136,10 @@ const createOrder = async (userId, {
       orderTotal = result.orderTotal;
       inventoryUpdates = result.inventoryUpdates;
 
-      // Clear cart after successful order creation
-      await db.CartItem.destroy({
-        where: { cart_id: cart.id },
-        transaction
-      });
+      // Store cart ID for future reference (cart will be cleared after payment)
+      if (!cartId) {
+        cartId = cart.id;
+      }
     }
 
     // Calculate shipping cost
@@ -150,7 +150,7 @@ const createOrder = async (userId, {
     });
 
     // Create order with shipping details
-    const order = await db.Order.create({
+    const orderData = {
       user_id: userId,
       status: 'pending',
       payment_status: 'pending',
@@ -159,7 +159,14 @@ const createOrder = async (userId, {
       shipping_cost: shippingCost,
       total: orderTotal + shippingCost, // Include shipping in total
       OrderItems: orderItems
-    }, {
+    };
+    
+    // Add cart_id to order if provided
+    if (cartId) {
+      orderData.cart_id = cartId;
+    }
+    
+    const order = await db.Order.create(orderData, {
       include: [db.OrderItem],
       transaction
     });

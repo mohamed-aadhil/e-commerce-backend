@@ -479,21 +479,17 @@ async function checkout(sessionId, userId, { addressId, shippingMethod = 'standa
         price: item.price || item.product?.selling_price || 0
       }));
 
-      // 3. Create order from cart
+      // 3. Create order from cart, passing the cartId
+      // Cart will be cleared after successful payment
       const order = await orderService.createOrder(userId, {
         addressId,
         items: orderItems,
         shippingMethod,
-        paymentMethod
+        paymentMethod,
+        cartId: cart.id // Pass the cart ID to be stored with the order
       }, { transaction });
 
-      // 4. Clear the cart after successful order creation
-      await CartItem.destroy({
-        where: { cart_id: cart.id },
-        transaction
-      });
-
-      // 5. Update cart's updated_at timestamp
+      // 4. Update cart's updated_at timestamp (don't clear items yet)
       await cart.update({ updated_at: new Date() }, { transaction });
 
       return order;
@@ -504,12 +500,44 @@ async function checkout(sessionId, userId, { addressId, shippingMethod = 'standa
   });
 }
 
+/**
+ * Clear cart by ID
+ * @param {number} cartId - The ID of the cart to clear
+ * @param {Object} [options] - Options
+ * @param {import('sequelize').Transaction} [options.transaction] - Optional transaction
+ * @returns {Promise<boolean>} True if cart was cleared successfully
+ */
+async function clearCartById(cartId, { transaction } = {}) {
+  try {
+    // Delete all cart items
+    await CartItem.destroy({
+      where: { cart_id: cartId },
+      transaction
+    });
+    
+    // Update cart's updated_at timestamp
+    await Cart.update(
+      { updated_at: new Date() },
+      { 
+        where: { id: cartId },
+        transaction
+      }
+    );
+    
+    return true;
+  } catch (error) {
+    console.error('Error clearing cart by ID:', error);
+    throw error;
+  }
+}
+
 module.exports = {
   getOrCreateCart,
   addItem,
   updateItem,
   removeItem,
   clearCart,
-  mergeCarts,
+  clearCartById,
   checkout,
+  mergeCarts,
 };
