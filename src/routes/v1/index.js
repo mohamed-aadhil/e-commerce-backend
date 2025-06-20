@@ -11,6 +11,7 @@ const userRoutes = require('./user.routes');
 const orderRoutes = require('./order.routes');
 const paymentRoutes = require('./payment.routes');
 const testRoutes = require('./test.routes');
+const analyticsRoutes = require('./analytics.routes');
 
 // Mount routes with specific paths first
 router.use('/auth', authRoutes);
@@ -18,6 +19,7 @@ router.use('/cart', cartRoutes);     // Mount cart routes at /api/v1/cart
 router.use('/users', userRoutes);    // Mount user routes at /api/v1/users
 router.use('/orders', orderRoutes);  // Mount order routes at /api/v1/orders
 router.use('/payments', paymentRoutes); // Mount payment routes at /api/v1/payments
+router.use('/analytics', analyticsRoutes); // Mount analytics routes at /api/v1/analytics
 router.use('/test', testRoutes);     // Mount test routes at /api/v1/test
 
 // Mount other routes with more specific paths first to avoid conflicts

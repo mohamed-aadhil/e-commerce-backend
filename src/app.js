@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const http = require('http');
 const app = express();
 const dotenv = require('dotenv');
 const cookieParser = require('cookie-parser');
@@ -7,6 +8,7 @@ const session = require('express-session');
 const routes = require('./routes');
 const { errorHandler } = require('./middlewares/error.middleware');
 const sessionStore = require('./config/session-store');
+const webSocketService = require('./services/websocket.service');
 
 // Swagger UI setup
 const swaggerUi = require('swagger-ui-express');

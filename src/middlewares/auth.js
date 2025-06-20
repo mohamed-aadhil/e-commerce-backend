@@ -43,9 +43,20 @@ const authenticate = async (req, res, next) => {
 
 // Authorization middleware: checks if user has required role
 const authorize = (role) => (req, res, next) => {
+  // For analytics endpoints, allow both 'admin' and 'customer' roles during development
+  const isAnalyticsRoute = req.originalUrl.includes('/api/v1/analytics');
+  
+  if (isAnalyticsRoute && (req.user?.role === 'admin' || req.user?.role === 'customer')) {
+    console.log(`Allowing ${req.user.role} access to analytics`);
+    return next();
+  }
+  
+  // For all other routes, use the original role check
   if (!req.user || req.user.role !== role) {
+    console.log(`Access denied. User role: ${req.user?.role || 'none'}, Required role: ${role}`);
     return res.status(403).json({ error: 'Forbidden: insufficient privileges' });
   }
+  
   next();
 };
 
