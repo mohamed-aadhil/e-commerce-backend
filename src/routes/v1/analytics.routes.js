@@ -11,12 +11,12 @@ router.get(
   analyticsController.getGenreDistribution
 );
 
-// Get genre statistics
+// Get price analysis by genre
 router.get(
-  '/genre-stats',
+  '/price-analysis/:genreId',
   authenticate,
   authorize(['admin']),
-  analyticsController.getGenreStats
+  analyticsController.getPriceAnalysisByGenre
 );
 
 module.exports = router;

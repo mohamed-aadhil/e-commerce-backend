@@ -46,6 +46,16 @@ class WebSocketService {
     }
   }
 
+  // Method to broadcast price updates for a specific genre
+  broadcastPriceUpdate(genreId) {
+    if (this.io) {
+      this.io.to('analytics').emit('price-data-updated', { 
+        genreId,
+        timestamp: new Date().toISOString() 
+      });
+    }
+  }
+
   // Method to get connected clients count (for monitoring)
   getConnectedClients() {
     return this.clients.size;
