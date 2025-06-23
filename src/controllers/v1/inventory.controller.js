@@ -1,9 +1,30 @@
 const inventoryService = require('../../services/v1/inventory.service');
+const analyticsController = require('./analytics.controller');
 const { inventoryTransactionWithStockDTO } = require('../../dtos/v1/inventory.dto');
+const logger = require('../../utils/logger');
+
+/**
+ * Helper method to notify clients about inventory changes
+ * Wraps the notification in a try-catch to prevent it from affecting the main operation
+ */
+async function notifyInventoryChange(operation, productId) {
+  try {
+    await analyticsController.notifyInventoryUpdate();
+    logger.info(`Inventory update notification sent after ${operation} for product ${productId}`);
+  } catch (error) {
+    // Log the error but don't fail the main operation
+    logger.error(`Error notifying inventory update after ${operation} for product ${productId}:`, error);
+  }
+}
 
 exports.restockProduct = async (req, res, next) => {
+  const productId = req.params.id;
   try {
-    const inventory = await inventoryService.restockProduct(req.params.id, req.body);
+    const inventory = await inventoryService.restockProduct(productId, req.body);
+    
+    // Notify clients about the inventory update
+    await notifyInventoryChange('restock', productId);
+    
     res.status(200).json(inventory);
   } catch (err) {
     next(err);

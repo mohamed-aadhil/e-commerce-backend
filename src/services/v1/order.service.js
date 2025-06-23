@@ -2,6 +2,8 @@ const db = require('../../models');
 const { Op } = require('sequelize');
 const shippingService = require('./shipping.service');
 const paymentService = require('./payment.service');
+const analyticsController = require('../../controllers/v1/analytics.controller');
+const logger = require('../../utils/logger');
 
 /**
  * Create order items and calculate total
@@ -198,6 +200,14 @@ const createOrder = async (userId, {
     await order.save({ transaction });
 
     await transaction.commit();
+
+    // Notify about inventory update after successful order
+    try {
+      await analyticsController.notifyInventoryUpdate();
+    } catch (error) {
+      // Log error but don't fail the order because of notification failure
+      logger.error('Failed to send inventory update notification after order:', error);
+    }
 
     // Return order details
     return getOrderById(order.id, userId);

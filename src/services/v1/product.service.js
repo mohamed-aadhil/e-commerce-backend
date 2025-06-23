@@ -2,6 +2,8 @@ const { Op, DataTypes } = require('sequelize');
 const { sequelize } = require('../../models');
 const db = require('../../models');
 const { productCardDTO } = require('../../dtos/v1/product.card.dto');
+const analyticsController = require('../../controllers/v1/analytics.controller');
+const logger = require('../../utils/logger');
 
 // Destructure models from the centralized db object
 const { 
@@ -88,6 +90,7 @@ const createProduct = async (data) => {
     }
 
     // 4. Inventory logic: create inventory record with initial stock
+    let inventoryCreated = false;
     if (typeof data.initial_stock === 'number' && data.initial_stock >= 0) {
       await Inventory.create({
         product_id: product.id,
@@ -100,6 +103,24 @@ const createProduct = async (data) => {
         change: data.initial_stock,
         reason: 'initial_stock',
       }, { transaction: t });
+      
+      inventoryCreated = true;
+    }
+    
+    // 5. Notify about inventory update if stock was created
+    if (inventoryCreated) {
+      try {
+        // We need to commit the transaction first before notifying
+        await t.afterCommit(async () => {
+          try {
+            await analyticsController.notifyInventoryUpdate();
+          } catch (error) {
+            logger.error('Error in afterCommit inventory notification:', error);
+          }
+        });
+      } catch (error) {
+        logger.error('Error setting up afterCommit hook for inventory notification:', error);
+      }
     }
 
     return product;

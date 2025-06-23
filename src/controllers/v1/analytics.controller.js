@@ -70,6 +70,57 @@ class AnalyticsController {
       next(error);
     }
   }
+
+  /**
+   * Get stock levels for products, optionally filtered by genre
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   * @param {Function} next - Express next middleware function
+   */
+  async getStockLevelsByGenre(req, res, next) {
+    try {
+      const { genreId = '0' } = req.params;
+      
+      // Validate genreId if provided
+      if (genreId !== '0' && isNaN(parseInt(genreId, 10))) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid genre ID'
+        });
+      }
+
+      const stockData = await analyticsService.getStockLevelsByGenre(genreId);
+      
+      res.json({
+        success: true,
+        data: stockData
+      });
+    } catch (error) {
+      logger.error('Error in getStockLevelsByGenre controller:', error);
+      next(error);
+    }
+  }
+
+  /**
+   * Notify all connected clients about inventory updates
+   * This will be called from other controllers when inventory changes
+   */
+  async notifyInventoryUpdate() {
+    try {
+      // Get stock levels for all genres
+      const stockData = await analyticsService.getStockLevelsByGenre('0');
+      
+      // Broadcast to all connected clients in the analytics room
+      webSocketService.broadcastInventoryUpdate({
+        timestamp: new Date().toISOString(),
+        stockLevels: stockData
+      });
+      
+      logger.info('Broadcasted inventory update to connected clients');
+    } catch (error) {
+      logger.error('Error notifying inventory update:', error);
+    }
+  }
 }
 
 module.exports = new AnalyticsController();

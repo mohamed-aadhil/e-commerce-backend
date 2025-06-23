@@ -19,4 +19,12 @@ router.get(
   analyticsController.getPriceAnalysisByGenre
 );
 
+// Get stock levels by genre (0 for all genres)
+router.get(
+  '/stock-levels/:genreId?',
+  authenticate,
+  authorize(['admin']),
+  analyticsController.getStockLevelsByGenre
+);
+
 module.exports = router;

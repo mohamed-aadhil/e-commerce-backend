@@ -56,6 +56,19 @@ class WebSocketService {
     }
   }
 
+  /**
+   * Broadcast inventory updates to all clients in the analytics room
+   * @param {Object} inventoryData - The inventory data to broadcast
+   */
+  broadcastInventoryUpdate(inventoryData) {
+    if (this.io) {
+      this.io.to('analytics').emit('inventory-updated', {
+        ...inventoryData,
+        timestamp: new Date().toISOString()
+      });
+    }
+  }
+
   // Method to get connected clients count (for monitoring)
   getConnectedClients() {
     return this.clients.size;
