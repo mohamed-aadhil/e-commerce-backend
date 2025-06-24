@@ -39,32 +39,41 @@ class WebSocketService {
     console.log('WebSocket service initialized');
   }
 
-  // Method to broadcast genre updates to all clients in the analytics room
-  broadcastGenreUpdate(genreData) {
+  /**
+   * Broadcast genre distribution updates to all clients in the analytics room
+   * @param {Object} data - The genre data to broadcast
+   */
+  broadcastGenreUpdate(data) {
     if (this.io) {
-      this.io.to('analytics').emit('genre-data-updated', genreData);
+      this.io.to('analytics').emit('genre-data-updated', {
+        ...data,
+        timestamp: data.timestamp || new Date().toISOString()
+      });
     }
   }
 
-  // Method to broadcast price updates for a specific genre
-  broadcastPriceUpdate(genreId) {
+  /**
+   * Broadcast price analysis updates to all clients in the analytics room
+   * @param {Object} data - The price analysis data to broadcast
+   */
+  broadcastPriceUpdate(data) {
     if (this.io) {
-      this.io.to('analytics').emit('price-data-updated', { 
-        genreId,
-        timestamp: new Date().toISOString() 
+      this.io.to('analytics').emit('price-data-updated', {
+        ...data,
+        timestamp: data.timestamp || new Date().toISOString()
       });
     }
   }
 
   /**
    * Broadcast inventory updates to all clients in the analytics room
-   * @param {Object} inventoryData - The inventory data to broadcast
+   * @param {Object} data - The inventory data to broadcast
    */
-  broadcastInventoryUpdate(inventoryData) {
+  broadcastInventoryUpdate(data) {
     if (this.io) {
       this.io.to('analytics').emit('inventory-updated', {
-        ...inventoryData,
-        timestamp: new Date().toISOString()
+        ...data,
+        timestamp: data.timestamp || new Date().toISOString()
       });
     }
   }

@@ -1,26 +1,31 @@
 const productService = require('../../services/v1/product.service');
 const analyticsController = require('./analytics.controller');
-const webSocketService = require('../../services/websocket.service');
 const { productDetailsDTO } = require('../../dtos/v1/product.details.dto');
 const { productCardDTO } = require('../../dtos/v1/product.card.dto');
 const { productDeleteDTO } = require('../../dtos/v1/product.delete.dto');
 const logger = require('../../utils/logger');
 
+/**
+ * Get unique genre IDs from product data
+ * @param {Object} product - Product data
+ * @returns {number[]} Array of unique genre IDs
+ */
+function getUniqueGenreIds(product) {
+  if (!product || !product.genres) return [];
+  return [...new Set(product.genres.map(genre => 
+    typeof genre === 'object' ? genre.id : genre
+  ))];
+}
+
 exports.createProduct = async (req, res, next) => {
   try {
     const product = await productService.createProduct(req.body);
     
-    // Notify about genre data update and price changes if there are genres
-    if (req.body.genres && req.body.genres.length > 0) {
+    // Notify about analytics updates if there are genres
+    const genreIds = getUniqueGenreIds({ genres: req.body.genres });
+    if (genreIds.length > 0) {
       try {
-        await analyticsController.notifyGenreDataUpdate();
-        
-        // Notify about price changes for each genre
-        await Promise.all(
-          req.body.genres.map(genreId => 
-            webSocketService.broadcastPriceUpdate(genreId)
-          )
-        );
+        await analyticsController.notifyAllUpdates(genreIds[0]);
       } catch (wsError) {
         logger.error('Error notifying about updates after product creation:', wsError);
       }
@@ -34,44 +39,26 @@ exports.createProduct = async (req, res, next) => {
 
 exports.updateProduct = async (req, res, next) => {
   try {
-    // Get the current product to check for price or genre changes
+    // Get current product with genres before update
     const currentProduct = await productService.getProductDetails(req.params.id);
+    
+    // Perform the update
     const product = await productService.updateProduct(req.params.id, req.body);
     
-    // Check if we need to notify about genre or price changes
-    const shouldNotifyGenreUpdate = req.body.genres && 
-      JSON.stringify(currentProduct.genres) !== JSON.stringify(req.body.genres);
-      
-    const shouldNotifyPriceUpdate = (req.body.cost_price !== undefined && 
-      parseFloat(req.body.cost_price) !== parseFloat(currentProduct.cost_price)) ||
-      (req.body.selling_price !== undefined && 
-      parseFloat(req.body.selling_price) !== parseFloat(currentProduct.selling_price));
+    // Get the updated product with fresh data
+    const updatedProduct = await productService.getProductDetails(req.params.id);
     
-    // Get the affected genre IDs
-    const affectedGenreIds = new Set([
-      ...(currentProduct.genres || []).map(g => g.id),
-      ...(req.body.genres || [])
-    ].filter(Boolean));
+    // Get all affected genre IDs (current and updated)
+    const currentGenreIds = getUniqueGenreIds(currentProduct);
+    const updatedGenreIds = getUniqueGenreIds(updatedProduct);
+    const allAffectedGenreIds = [...new Set([...currentGenreIds, ...updatedGenreIds])];
     
-    // Notify about genre data update if genres were modified
-    if (shouldNotifyGenreUpdate) {
+    // Notify about all updates for the first affected genre (if any)
+    if (allAffectedGenreIds.length > 0) {
       try {
-        await analyticsController.notifyGenreDataUpdate();
+        await analyticsController.notifyAllUpdates(allAffectedGenreIds[0]);
       } catch (wsError) {
-        logger.error('Error notifying about genre update after product update:', wsError);
-      }
-    }
-    
-    // Notify about price changes for each affected genre
-    if (shouldNotifyPriceUpdate && affectedGenreIds.size > 0) {
-      try {
-        await Promise.all(
-          Array.from(affectedGenreIds).map(genreId => 
-            webSocketService.broadcastPriceUpdate(genreId)
-          )
-        );
-      } catch (wsError) {
-        logger.error('Error notifying about price update:', wsError);
+        logger.error('Error notifying about updates after product update:', wsError);
       }
     }
     
@@ -83,27 +70,25 @@ exports.updateProduct = async (req, res, next) => {
 
 exports.deleteProduct = async (req, res, next) => {
   try {
-    // Get product details before deletion for notification
+    // Get product with genres before deletion
     const product = await productService.getProductDetails(req.params.id);
+    
+    // Extract genre IDs before deletion
+    const genreIds = getUniqueGenreIds(product);
+    
+    // Delete the product
     await productService.deleteProduct(req.params.id);
     
-    // Notify about genre data update and price changes if product had genres
-    if (product && product.genres && product.genres.length > 0) {
+    // Notify about all updates for the first genre (if any)
+    if (genreIds.length > 0) {
       try {
-        await analyticsController.notifyGenreDataUpdate();
-        
-        // Notify about price changes for each genre
-        await Promise.all(
-          product.genres.map(genre => 
-            webSocketService.broadcastPriceUpdate(genre.id)
-          )
-        );
+        await analyticsController.notifyAllUpdates(genreIds[0]);
       } catch (wsError) {
         logger.error('Error notifying about updates after product deletion:', wsError);
       }
     }
     
-    res.json(productDeleteDTO(req.params.id));
+    res.json({ success: true, message: 'Product deleted successfully' });
   } catch (err) {
     next(err);
   }

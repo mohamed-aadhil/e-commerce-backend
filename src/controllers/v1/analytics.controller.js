@@ -2,6 +2,12 @@ const analyticsService = require('../../services/v1/analytics.service');
 const webSocketService = require('../../services/websocket.service');
 const logger = require('../../utils/logger');
 
+/**
+ * @typedef {Object} NotificationResult
+ * @property {boolean} success - Whether the notification was sent successfully
+ * @property {string} [error] - Error message if notification failed
+ */
+
 class AnalyticsController {
   /**
    * Get genre distribution data
@@ -24,21 +30,22 @@ class AnalyticsController {
 
   /**
    * Notify all connected clients about genre data updates
-   * This will be called from other controllers when relevant data changes
+   * @returns {Promise<NotificationResult>} Result of the notification
    */
   async notifyGenreDataUpdate() {
     try {
       const genreData = await analyticsService.getGenreDistribution();
       
-      // Broadcast to all connected clients in the analytics room
       webSocketService.broadcastGenreUpdate({
         timestamp: new Date().toISOString(),
         genreDistribution: genreData
       });
       
-      logger.info('Broadcasted genre data update to connected clients');
+      logger.debug('Broadcasted genre data update to connected clients');
+      return { success: true };
     } catch (error) {
       logger.error('Error notifying genre data update:', error);
+      return { success: false, error: error.message };
     }
   }
 
@@ -102,24 +109,72 @@ class AnalyticsController {
   }
 
   /**
-   * Notify all connected clients about inventory updates
-   * This will be called from other controllers when inventory changes
+   * Notify all connected clients about price analysis updates for a genre
+   * @param {number} genreId - The ID of the genre to update
+   * @returns {Promise<NotificationResult>} Result of the notification
    */
-  async notifyInventoryUpdate() {
+  async notifyPriceDataUpdate(genreId) {
     try {
-      // Get stock levels for all genres
-      const stockData = await analyticsService.getStockLevelsByGenre('0');
+      if (!genreId || isNaN(parseInt(genreId, 10))) {
+        throw new Error('Valid genre ID is required');
+      }
+
+      const priceData = await analyticsService.getPriceAnalysisByGenre(parseInt(genreId, 10));
       
-      // Broadcast to all connected clients in the analytics room
+      webSocketService.broadcastPriceUpdate({
+        timestamp: new Date().toISOString(),
+        genreId: parseInt(genreId, 10),
+        priceAnalysis: priceData
+      });
+      
+      logger.debug(`Broadcasted price data update for genre ${genreId}`);
+      return { success: true };
+    } catch (error) {
+      logger.error('Error notifying price data update:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Notify all connected clients about inventory updates
+   * @param {string} [genreId='0'] - Optional genre ID to filter by
+   * @returns {Promise<NotificationResult>} Result of the notification
+   */
+  async notifyInventoryUpdate(genreId = '0') {
+    try {
+      const stockData = await analyticsService.getStockLevelsByGenre(genreId);
+      
       webSocketService.broadcastInventoryUpdate({
         timestamp: new Date().toISOString(),
+        genreId: genreId === '0' ? null : parseInt(genreId, 10),
         stockLevels: stockData
       });
       
-      logger.info('Broadcasted inventory update to connected clients');
+      logger.debug(`Broadcasted inventory update${genreId !== '0' ? ` for genre ${genreId}` : ''}`);
+      return { success: true };
     } catch (error) {
       logger.error('Error notifying inventory update:', error);
+      return { success: false, error: error.message };
     }
+  }
+  
+  /**
+   * Notify about all analytics updates (genre, price, inventory)
+   * @param {number} [genreId] - Optional genre ID for price updates
+   * @returns {Promise<{
+   *   genre: NotificationResult,
+   *   price: NotificationResult,
+   *   inventory: NotificationResult
+   * }>} Results of all notifications
+   */
+  async notifyAllUpdates(genreId) {
+    const [genreResult, priceResult, inventoryResult] = await Promise.all([
+      this.notifyGenreDataUpdate(),
+      genreId ? this.notifyPriceDataUpdate(genreId) : Promise.resolve({ success: true, skipped: true }),
+      this.notifyInventoryUpdate(genreId || '0')
+    ]);
+    
+    return { genre: genreResult, price: priceResult, inventory: inventoryResult };
   }
 }
 
