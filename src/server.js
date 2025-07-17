@@ -12,6 +12,9 @@ const server = http.createServer(app);
 // Initialize WebSocket service with the HTTP server
 webSocketService.initialize(server);
 
+// Make io instance available in app for routes
+app.set('io', webSocketService.io);
+
 // Test database connection and start server
 const startServer = async () => {
   try {
@@ -27,6 +30,7 @@ const startServer = async () => {
       console.log(`✅ Server is running on port ${PORT}`);
       console.log(`📚 Connected to database: ${process.env.DB_NAME}@${process.env.DB_HOST}:${process.env.DB_PORT}`);
       console.log(`🔌 WebSocket server initialized`);
+      console.log(`📊 WebSocket monitoring available at http://localhost:${PORT}/api/v1/websocket/analytics-room`);
     });
   } catch (error) {
     console.error('❌ Failed to start server:', error.message);

@@ -10,6 +10,9 @@ const { errorHandler } = require('./middlewares/error.middleware');
 const sessionStore = require('./config/session-store');
 const webSocketService = require('./services/websocket.service');
 
+// Import WebSocket routes
+const websocketRoutes = require('./routes/v1/websocket.routes');
+
 // Swagger UI setup
 const swaggerUi = require('swagger-ui-express');
 const YAML = require('yamljs');
@@ -113,6 +116,9 @@ app.get('/api/session-test', (req, res) => {
 
 // API routes
 app.use('/api', routes);
+
+// WebSocket monitoring routes
+app.use('/api/v1/websocket', websocketRoutes);
 
 // Swagger documentation
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
